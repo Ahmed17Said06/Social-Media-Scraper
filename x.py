@@ -100,3 +100,28 @@ WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, '//*[@
 
 # Select the first result
 account = driver.find_element(By.XPATH, '//*[@id="react-root"]/div/div/div[2]/main/div/div/div/div/div/div[3]/section/div/div/div[1]/div/div/button/div/div[2]/div[1]/div[1]/div/div[1]/a/div/div[1]/span').click()
+
+# Wait till the posts load
+WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, '//*[@id="react-root"]/div/div/div[2]/main/div/div/div/div/div/div[3]/div/div/section/div/div/div[1]/div/div/article/div/div/div[2]/div[2]')))
+
+# Import HTML to python
+soup = BeautifulSoup(driver.page_source, 'lxml')
+
+# Get all the posts
+posts = soup.find_all('div', class_ = 'css-146c3p1 r-8akbws r-krxsd3 r-dnmrzs r-1udh08x r-bcqeeo r-1ttztb7 r-qvutc0 r-37j5jr r-a023e6 r-rjixqe r-16dba41 r-bnwqim')
+
+# Array to store the scrapped tweets
+tweets = []
+
+# Scroling and savaing the text of the latest 200 unique tweets
+while True:
+    for post in posts:
+        tweets.append(post.text)
+    driver.execute_script('window.scrollTo(0,document.body.scrollHeight)')    
+    time.sleep(3)
+    soup = BeautifulSoup(driver.page_source, 'lxml')
+    posts = soup.find_all('div', class_ = 'css-146c3p1 r-8akbws r-krxsd3 r-dnmrzs r-1udh08x r-bcqeeo r-1ttztb7 r-qvutc0 r-37j5jr r-a023e6 r-rjixqe r-16dba41 r-bnwqim')
+    unique_tweets = list(set(tweets))
+    if len(unique_tweets) > 200:
+        break
+    
