@@ -30,6 +30,11 @@ wd = webdriver.Chrome(service=Service(ChromeDriverManager().install()),options=c
 # Get the main page
 wd.get("https://x.com/i/flow/login")
 
+time.sleep(3)
+# Assertion statement
+assert "Log in to X" in wd.title
+
+
 # Fill the below account details used to login to X.com
 login_email = 'socialmediascrape@gmail.com'
 login_username = '@socialmedi51534'
@@ -65,15 +70,15 @@ email_next_button = wd.find_element(By.XPATH, '//*[@id="layers"]/div[2]/div/div/
 time.sleep(3)
 
 # Find the username input box
-#username_box = wd.find_element(By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[1]/div/div[2]/label/div/div[2]/div/input')
+username_box = wd.find_element(By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[1]/div/div[2]/label/div/div[2]/div/input')
 
 # Enter username
-#username_box.send_keys(login_username)
-#time.sleep(1)
+username_box.send_keys(login_username)
+time.sleep(1)
 
 # Click on username next button
-#email_next_button = wd.find_element(By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[2]/div/div/div/button').click()
-#time.sleep(5)
+email_next_button = wd.find_element(By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[2]/div/div/div/button').click()
+time.sleep(5)
 
 # Find the password input box
 password_box = wd.find_element(By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[1]/div/div/div[3]/div/label/div/div[2]/div[1]/input')
