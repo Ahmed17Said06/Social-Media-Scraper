@@ -36,9 +36,9 @@ assert "Log in to X" in wd.title
 
 
 # Fill the below account details used to login to X.com
-login_email = 'socialmediascrape@gmail.com'
-login_username = '@socialmedi51534'
-login_password = 'thisis_B0T'
+login_email = ''
+login_username = ''
+login_password = ''
 
 # Account to scrape
 target_account = 'Bill Gates'
