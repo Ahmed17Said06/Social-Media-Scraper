@@ -202,35 +202,55 @@ articles = wd.find_elements(By.XPATH, "//article[@data-testid='tweet']")
 print(len(articles))
 tweets  = 0
 
+visited_tweets = {}
+
 while True:
+    articles = wd.find_elements(By.XPATH, "//article[@data-testid='tweet']")
+    
     for i in range(len(articles)):
         try:
-            # Relocate the elements to avoid stale element reference
+            # Relocate the article element to avoid stale reference
             articles = wd.find_elements(By.XPATH, "//article[@data-testid='tweet']")
+            article = articles[i]
             
-            print(f"Clicking on post {i + 1}")
+            # Extract the status ID from the tweet URL
+            tweet_url = article.find_element(By.XPATH, ".//a[contains(@href, '/status/')]").get_attribute('href')
+            status_id = tweet_url.split('/status/')[1]
             
-            # Find the specific tweet text div within the article
-            post = articles[i].find_element(By.XPATH, ".//div[@data-testid='tweetText']").click()
+            if visited_tweets.get(status_id):
+                print(f"Skipping post {status_id} as it was visited before.")
+                continue
             
+            print(f"Clicking on post {status_id}")
+            
+            # Mark as visited
+            visited_tweets[status_id] = True
+            
+            # Click the tweet to view its details
+            article.find_element(By.XPATH, ".//div[@data-testid='tweetText']").click()
             time.sleep(2)
-            # More Operations
             
-            tweets += 1
-
-            # Click back
-            back = wd.find_element(By.XPATH, "//button[@data-testid='app-bar-back']").click()
+            # Perform scraping or other operations here
+            
+            # Click back to return to the main page
+            wd.find_element(By.XPATH, "//button[@data-testid='app-bar-back']").click()
             time.sleep(2)
             
         except Exception as e:
             print(f"Error occurred while processing post {i + 1}: {e}")
-            
-    if tweets > 100:
-        break
-       
-    wd.execute_script('window.scrollBy(0,document.body.scrollHeight);')
+    
+    # Scroll down to load more tweets
+    wd.execute_script('window.scrollBy(0,200);')
     time.sleep(3)
-    articles = wd.find_elements(By.XPATH,"//article[@data-testid='tweet']")
+    
+    # Break the loop if you've visited enough tweets
+    if len(visited_tweets) > 100:
+        break
+
+       
+    # wd.execute_script('window.scrollBy(0,document.body.scrollHeight);')
+    # time.sleep(3)
+    # articles = wd.find_elements(By.XPATH,"//article[@data-testid='tweet']")
     print(f"articles length now is {len(articles)}")
     time.sleep(1)
 
