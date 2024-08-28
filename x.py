@@ -124,26 +124,129 @@ account = wd.find_element(By.XPATH, '//*[@id="react-root"]/div/div/div[2]/main/d
 WebDriverWait(wd, 10).until(EC.presence_of_element_located((By.XPATH, '//*[@id="react-root"]/div/div/div[2]/main/div/div/div/div/div/div[3]/div/div/section/div/div/div[1]/div/div/article/div/div/div[2]/div[2]')))
 
 
-# Import HTML to python
-soup = BeautifulSoup(wd.page_source, 'lxml')
+# # Import HTML to python
+# soup = BeautifulSoup(wd.page_source, 'lxml')
 
-# Get all the posts
-posts = soup.find_all('div', class_ = 'css-146c3p1 r-8akbws r-krxsd3 r-dnmrzs r-1udh08x r-bcqeeo r-1ttztb7 r-qvutc0 r-37j5jr r-a023e6 r-rjixqe r-16dba41 r-bnwqim')
+# # Get all the posts
+# posts = soup.find_all('div', class_ = 'css-146c3p1 r-8akbws r-krxsd3 r-dnmrzs r-1udh08x r-bcqeeo r-1ttztb7 r-qvutc0 r-37j5jr r-a023e6 r-rjixqe r-16dba41 r-bnwqim')
 
 
-tweets = []
+# # Click on the post on the page
+# post = wd.find_element(By.XPATH, '//*[@id="react-root"]/div/div/div[2]/main/div/div/div/div/div/div[3]/div/div/section/div/div/div[1]').click()
+
+# time.sleep(1)
+
+# # Import HTML to python
+# soup = BeautifulSoup(wd.page_source, 'lxml')
+
+# # Scraping post text
+# post_text = soup.find('div', class_ = 'css-146c3p1 r-bcqeeo r-1ttztb7 r-qvutc0 r-37j5jr r-1inkyih r-16dba41 r-bnwqim r-135wba7')
+# post_text.text
+
+# # Scraping post datetime
+# post_datetime = soup.find('a', class_ = 'css-1jxf684 r-bcqeeo r-1ttztb7 r-qvutc0 r-poiln3 r-xoduu5 r-1q142lx r-1w6e6rj r-9aw3ui r-3s2u2q r-1loqt21')
+# post_datetime.text
+
+# # Scraping the images
+# post_images_div = soup.find_all('img', {'alt': 'Image'})
+
+# # Extract the src attribute, which contains the image URL
+# post_images = [img['src'] for img in post_images_div]
+
+# # Now `image_urls` will contain the list of image URLs from tweets
+# print(post_images)
+
+
+# # Scraping links
+# # Find all <a> tags with the specific class
+# post_links_div = soup.find_all('a', class_='css-175oi2r r-1udh08x r-13qz1uu r-o7ynqc r-6416eg r-1ny4l3l r-1loqt21')
+
+# # Extract the href attribute from each link
+# post_links = [a['href'] for a in post_links_div]
+
+# # Print the extracted links
+# print(post_links)
+
+
+# # Scraping Embed Posts
+# # Find all <a> tags with the specific class
+# post_embed_links_div = soup.find_all('a', class_='css-146c3p1 r-bcqeeo r-1ttztb7 r-qvutc0 r-37j5jr r-a023e6 r-rjixqe r-16dba41 r-1loqt21')
+
+# # Filter and build the list of post embed links
+# post_embed_links = [
+#     f"https://x.com{a['href']}" for a in post_embed_links_div if '/status/' in a['href']
+# ]
+
+# # Print the extracted links
+# print(post_embed_links)
+
+
+# # Click back
+# post = wd.find_element(By.XPATH, '//*[@id="react-root"]/div/div/div[2]/main/div/div/div/div[1]/div/div[1]/div[1]/div/div/div/div/div/div[1]/button').click()
+# time.sleep(1)
+
+
+
+# posts = []
+
+# post = {
+#         'text': post_text,
+#         'datetime': post_datetime,
+#         'images': post_images,
+#         'links': post_links,
+#         'Embedtweets': post_embed_links
+#         }
+
+articles = wd.find_elements(By.XPATH, "//article[@data-testid='tweet']")
+
+print(len(articles))
+tweets  = 0
+
+while True:
+    for i in range(len(articles)):
+        try:
+            # Relocate the elements to avoid stale element reference
+            articles = wd.find_elements(By.XPATH, "//article[@data-testid='tweet']")
+            
+            print(f"Clicking on post {i + 1}")
+            
+            # Find the specific tweet text div within the article
+            post = articles[i].find_element(By.XPATH, ".//div[@data-testid='tweetText']").click()
+            
+            time.sleep(2)
+            # More Operations
+            
+            tweets += 1
+
+            # Click back
+            back = wd.find_element(By.XPATH, "//button[@data-testid='app-bar-back']").click()
+            time.sleep(2)
+            
+        except Exception as e:
+            print(f"Error occurred while processing post {i + 1}: {e}")
+            
+    if tweets > 100:
+        break
+       
+    wd.execute_script('window.scrollBy(0,document.body.scrollHeight);')
+    time.sleep(3)
+    articles = wd.find_elements(By.XPATH,"//article[@data-testid='tweet']")
+    print(f"articles length now is {len(articles)}")
+    time.sleep(1)
+
+#tweets = []
 
 # Scroling and savaing the text of the latest 200 unique tweets
-while True:
-    for post in posts:
-        tweets.append(post.text)
-    wd.execute_script('window.scrollTo(0,document.body.scrollHeight)')    
-    time.sleep(3)
-    soup = BeautifulSoup(wd.page_source, 'lxml')
-    posts = soup.find_all('div', class_ = 'css-146c3p1 r-8akbws r-krxsd3 r-dnmrzs r-1udh08x r-bcqeeo r-1ttztb7 r-qvutc0 r-37j5jr r-a023e6 r-rjixqe r-16dba41 r-bnwqim')
-    unique_tweets = list(set(tweets))
-    if len(unique_tweets) > 200:
-        break
+#while True:
+#    for post in posts:
+#        tweets.append(post.text)
+#    wd.execute_script('window.scrollTo(0,document.body.scrollHeight)')    
+#    time.sleep(3)
+#    soup = BeautifulSoup(wd.page_source, 'lxml')
+#    posts = soup.find_all('div', class_ = 'css-146c3p1 r-8akbws r-krxsd3 r-dnmrzs r-1udh08x r-bcqeeo r-1ttztb7 r-qvutc0 r-37j5jr r-a023e6 r-rjixqe r-16dba41 r-bnwqim')
+#    unique_tweets = list(set(tweets))
+#    if len(unique_tweets) > 200:
+#        break
     
 # next steps
 # - Arrange the tweets from latest to oldest
