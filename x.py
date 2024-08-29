@@ -19,6 +19,7 @@ from bs4 import BeautifulSoup
 import pandas as pd
 import time
 
+
 # Options
 chrome_options = Options()
 chrome_options.add_argument('--no-sandbox')                # A security mechanism for separating running websites to avoid potential system failures.
@@ -41,19 +42,8 @@ login_username = ''
 login_password = ''
 
 # Account to scrape
-target_account = 'Bill Gates'
+target_account = 'Bill Gates' #'Bill Gates'
 
-# Specify the path to the ChromeDriver
-#chrome_driver_path = '/home/ahmeds/Downloads/chromedriver-linux64/chromedriver'
-
-# Create a Service object
-#service = Service(executable_path=chrome_driver_path)
-
-# Initialize the Chrome browser with the Service object
-#driver = webdriver.Chrome(service=service)
-
-# Open a X.com login page
-#driver.get("https://x.com/i/flow/login")
 
 # Wait to ensure login page is fully loaded
 time.sleep(5)
@@ -124,89 +114,89 @@ account = wd.find_element(By.XPATH, '//*[@id="react-root"]/div/div/div[2]/main/d
 WebDriverWait(wd, 10).until(EC.presence_of_element_located((By.XPATH, '//*[@id="react-root"]/div/div/div[2]/main/div/div/div/div/div/div[3]/div/div/section/div/div/div[1]/div/div/article/div/div/div[2]/div[2]')))
 
 
-# # Import HTML to python
-# soup = BeautifulSoup(wd.page_source, 'lxml')
 
-# # Get all the posts
-# posts = soup.find_all('div', class_ = 'css-146c3p1 r-8akbws r-krxsd3 r-dnmrzs r-1udh08x r-bcqeeo r-1ttztb7 r-qvutc0 r-37j5jr r-a023e6 r-rjixqe r-16dba41 r-bnwqim')
+def scrape(html_content):
+    
+    # Import HTML to python
+    soup = BeautifulSoup(html_content, 'lxml')
 
+    # Scraping post text
+    post_text_div = soup.find('div', class_ = 'css-146c3p1 r-bcqeeo r-1ttztb7 r-qvutc0 r-37j5jr r-1inkyih r-16dba41 r-bnwqim r-135wba7')
+    post_text = post_text_div.text.strip() if post_text_div else None
 
-# # Click on the post on the page
-# post = wd.find_element(By.XPATH, '//*[@id="react-root"]/div/div/div[2]/main/div/div/div/div/div/div[3]/div/div/section/div/div/div[1]').click()
+    # Scraping post datetime
+    post_datetime_div = soup.find('a', class_ = 'css-1jxf684 r-bcqeeo r-1ttztb7 r-qvutc0 r-poiln3 r-xoduu5 r-1q142lx r-1w6e6rj r-9aw3ui r-3s2u2q r-1loqt21')
+    post_datetime = post_datetime_div.text if post_datetime_div else None
 
-# time.sleep(1)
-
-# # Import HTML to python
-# soup = BeautifulSoup(wd.page_source, 'lxml')
-
-# # Scraping post text
-# post_text = soup.find('div', class_ = 'css-146c3p1 r-bcqeeo r-1ttztb7 r-qvutc0 r-37j5jr r-1inkyih r-16dba41 r-bnwqim r-135wba7')
-# post_text.text
-
-# # Scraping post datetime
-# post_datetime = soup.find('a', class_ = 'css-1jxf684 r-bcqeeo r-1ttztb7 r-qvutc0 r-poiln3 r-xoduu5 r-1q142lx r-1w6e6rj r-9aw3ui r-3s2u2q r-1loqt21')
-# post_datetime.text
-
-# # Scraping the images
-# post_images_div = soup.find_all('img', {'alt': 'Image'})
-
-# # Extract the src attribute, which contains the image URL
-# post_images = [img['src'] for img in post_images_div]
-
-# # Now `image_urls` will contain the list of image URLs from tweets
-# print(post_images)
+    # Scraping the images
+    post_images_div = soup.find_all('img', {'alt': 'Image'})
+    
+    # Extract the src attribute, which contains the image URL
+    post_images = [img['src'] for img in post_images_div]
 
 
-# # Scraping links
-# # Find all <a> tags with the specific class
-# post_links_div = soup.find_all('a', class_='css-175oi2r r-1udh08x r-13qz1uu r-o7ynqc r-6416eg r-1ny4l3l r-1loqt21')
-
-# # Extract the href attribute from each link
-# post_links = [a['href'] for a in post_links_div]
-
-# # Print the extracted links
-# print(post_links)
+    # Scraping links
+    post_links_div = soup.find_all('a', class_='css-175oi2r r-1udh08x r-13qz1uu r-o7ynqc r-6416eg r-1ny4l3l r-1loqt21')
+    
+    # Extract the href attribute from each link
+    post_links = [a['href'] for a in post_links_div]
 
 
-# # Scraping Embed Posts
-# # Find all <a> tags with the specific class
-# post_embed_links_div = soup.find_all('a', class_='css-146c3p1 r-bcqeeo r-1ttztb7 r-qvutc0 r-37j5jr r-a023e6 r-rjixqe r-16dba41 r-1loqt21')
-
-# # Filter and build the list of post embed links
-# post_embed_links = [
-#     f"https://x.com{a['href']}" for a in post_embed_links_div if '/status/' in a['href']
-# ]
-
-# # Print the extracted links
-# print(post_embed_links)
+    # Scraping Embed Posts
+    post_embed_links_div = soup.find_all('a', class_='css-146c3p1 r-bcqeeo r-1ttztb7 r-qvutc0 r-37j5jr r-a023e6 r-rjixqe r-16dba41 r-1loqt21')
+    
+    # Filter and build the list of post embed links
+    post_embed_links = [
+         f"https://x.com{a['href']}" for a in post_embed_links_div if '/status/' in a['href']
+     ]
 
 
-# # Click back
-# post = wd.find_element(By.XPATH, '//*[@id="react-root"]/div/div/div[2]/main/div/div/div/div[1]/div/div[1]/div[1]/div/div/div/div/div/div[1]/button').click()
-# time.sleep(1)
+    scraped_data = {
+             'text': post_text,
+             'datetime': post_datetime,
+             'images': post_images,
+             'links': post_links,
+             'embed_links': post_embed_links
+             }
+    return scraped_data
 
 
 
-# posts = []
+# Define the columns for the DataFrame
+columns = ['status_id', 'text', 'datetime', 'images', 'links', 'embed_links']
 
-# post = {
-#         'text': post_text,
-#         'datetime': post_datetime,
-#         'images': post_images,
-#         'links': post_links,
-#         'Embedtweets': post_embed_links
-#         }
+# Initialize an empty DataFrame with the specified columns
+df = pd.DataFrame(columns=columns)
 
+def add_to_dataframe(status_id, scraped_data):
+    global df
+    # Create a new DataFrame row with the scraped data
+    new_row = pd.DataFrame({
+        'status_id': [status_id],
+        'text': [scraped_data['text']],
+        'datetime': [scraped_data['datetime']],
+        'images': [scraped_data['images']],
+        'links': [scraped_data['links']],
+        'embed_links': [scraped_data['embed_links']]
+    })
+    
+    # Append the new row to the existing DataFrame
+    df = pd.concat([df, new_row], ignore_index=True)
+    
+    
 articles = wd.find_elements(By.XPATH, "//article[@data-testid='tweet']")
 
 print(len(articles))
+
 tweets  = 0
 
 visited_tweets = {}
 
+wait = WebDriverWait(wd, 10) 
+
+articles = wd.find_elements(By.XPATH, "//article[@data-testid='tweet']")
 while True:
     articles = wd.find_elements(By.XPATH, "//article[@data-testid='tweet']")
-    
     for i in range(len(articles)):
         try:
             # Relocate the article element to avoid stale reference
@@ -218,7 +208,7 @@ while True:
             status_id = tweet_url.split('/status/')[1]
             
             if visited_tweets.get(status_id):
-                print(f"Skipping post {status_id} as it was visited before.")
+                # print(f"Skipping post {status_id} as it was visited before.")
                 continue
             
             print(f"Clicking on post {status_id}")
@@ -226,52 +216,49 @@ while True:
             # Mark as visited
             visited_tweets[status_id] = True
             
-            # Click the tweet to view its details
-            article.find_element(By.XPATH, ".//div[@data-testid='tweetText']").click()
-            time.sleep(2)
             
-            # Perform scraping or other operations here
-            
-            # Click back to return to the main page
-            wd.find_element(By.XPATH, "//button[@data-testid='app-bar-back']").click()
+            # Wait until the tweet text div is clickable and then click it
+            tweet_text = article.find_element(By.XPATH, ".//div[@data-testid='tweetText']")
+            wait.until(EC.element_to_be_clickable(tweet_text))
+            time.sleep(1)  # Short delay before clicking
+            # tweet_text.click()
+            wd.execute_script("arguments[0].click();", tweet_text)
             time.sleep(2)
+
+            # Get page source and scrape data
+            html_content = wd.page_source
+            scraped_data = scrape(html_content)
+            
+            # Add to DataFrame
+            add_to_dataframe(status_id, scraped_data)
+            
+            
+            # Wait until the back button is clickable and then click it
+            back_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@data-testid='app-bar-back']")))
+            back_button.click()
+            time.sleep(3)
+            
+            # Scroll down to load more tweets
+            wd.execute_script('window.scrollBy(0,500);')
+            time.sleep(5)
             
         except Exception as e:
             print(f"Error occurred while processing post {i + 1}: {e}")
-    
-    # Scroll down to load more tweets
-    wd.execute_script('window.scrollBy(0,200);')
-    time.sleep(3)
-    
+            time.sleep(1) 
+                
     # Break the loop if you've visited enough tweets
-    if len(visited_tweets) > 100:
+    if len(visited_tweets) > 10:
         break
 
-       
-    # wd.execute_script('window.scrollBy(0,document.body.scrollHeight);')
-    # time.sleep(3)
-    # articles = wd.find_elements(By.XPATH,"//article[@data-testid='tweet']")
     print(f"articles length now is {len(articles)}")
+    wd.execute_script('window.scrollBy(0,500);')
     time.sleep(1)
 
-#tweets = []
 
-# Scroling and savaing the text of the latest 200 unique tweets
-#while True:
-#    for post in posts:
-#        tweets.append(post.text)
-#    wd.execute_script('window.scrollTo(0,document.body.scrollHeight)')    
-#    time.sleep(3)
-#    soup = BeautifulSoup(wd.page_source, 'lxml')
-#    posts = soup.find_all('div', class_ = 'css-146c3p1 r-8akbws r-krxsd3 r-dnmrzs r-1udh08x r-bcqeeo r-1ttztb7 r-qvutc0 r-37j5jr r-a023e6 r-rjixqe r-16dba41 r-bnwqim')
-#    unique_tweets = list(set(tweets))
-#    if len(unique_tweets) > 200:
-#        break
-    
 # next steps
-# - Arrange the tweets from latest to oldest
-# - Make sure you scrape the full text "see more"
-# - Scrape the other attributes of the post
-# - How to make the web app
-# - The data-base needed
+# - Arrange the tweets from latest to oldest >> Done
+# - Make sure you scrape the full text "see more" >> Done
+# - Scrape the other attributes of the post >> Done
+# - The data-base needed 
+# - Make the web app
   
