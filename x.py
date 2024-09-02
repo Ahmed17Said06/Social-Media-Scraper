@@ -42,7 +42,7 @@ login_username = ''
 login_password = ''
 
 # Account to scrape
-target_account = 'Bill Gates' #'Bill Gates'
+target_account = '@Cristiano' # Barak Obama # Bill Gates # Cristiano Ronaldo
 
 
 # Wait to ensure login page is fully loaded
@@ -53,62 +53,72 @@ email_box = wd.find_element(By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/
  
 # Enter email 
 email_box.send_keys(login_email)
-time.sleep(1)
+time.sleep(3)
 
 # Click on email next button
 email_next_button = wd.find_element(By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div/div/div/button[2]').click()
 time.sleep(3)
 
-# Find the username input box
-username_box = wd.find_element(By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[1]/div/div[2]/label/div/div[2]/div/input')
+try:
+    # Find the username input box
+    username_box = wd.find_element(By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[1]/div/div[2]/label/div/div[2]/div/input')
+    
+    # Enter username
+    username_box.send_keys(login_username)
+    time.sleep(3)
+    
+    # Click on username next button
+    email_next_button = wd.find_element(By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[2]/div/div/div/button').click()
+    time.sleep(3)
 
-# Enter username
-username_box.send_keys(login_username)
-time.sleep(1)
-
-# Click on username next button
-email_next_button = wd.find_element(By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[2]/div/div/div/button').click()
-time.sleep(5)
+except:
+    pass 
 
 # Find the password input box
 password_box = wd.find_element(By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[1]/div/div/div[3]/div/label/div/div[2]/div[1]/input')
 
 # Enter password
 password_box.send_keys(login_password)
-time.sleep(1)
+time.sleep(3)
 
 # Click on login button
 login_next_button = wd.find_element(By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[2]/div/div[1]/div/div/button').click()
 
 # Wait till the search icon loads
 WebDriverWait(wd, 10).until(EC.presence_of_element_located((By.XPATH, '//*[@id="react-root"]/div/div/div[2]/header/div/div/div/div[1]/div[2]/nav/a[2]/div/div')))
+time.sleep(2)
 
 # Click on the search button
 login_next_button = wd.find_element(By.XPATH, '//*[@id="react-root"]/div/div/div[2]/header/div/div/div/div[1]/div[2]/nav/a[2]/div/div').click()
 
 # Wait till the search box loads
 WebDriverWait(wd, 10).until(EC.presence_of_element_located((By.XPATH, '//*[@id="react-root"]/div/div/div[2]/main/div/div/div/div/div/div[1]/div[1]/div[1]/div/div/div/div/div[1]/div[2]/div/div/div/form/div[1]/div/div/div/div/div[2]/div/input')))
+time.sleep(2)
 
 # Find the search input box
 search_box = wd.find_element(By.XPATH, '//*[@id="react-root"]/div/div/div[2]/main/div/div/div/div/div/div[1]/div[1]/div[1]/div/div/div/div/div[1]/div[2]/div/div/div/form/div[1]/div/div/div/div/div[2]/div/input')
 
 # Enter the target account name to the search box
 search_box.send_keys(target_account)
+time.sleep(2)
 
 # Press Enter
 search_box.send_keys(Keys().ENTER)
+time.sleep(2)
 
 # Wait till the roles load
 WebDriverWait(wd, 10).until(EC.presence_of_element_located((By.XPATH, '//*[@id="react-root"]/div/div/div[2]/main/div/div/div/div/div/div[1]/div[1]/div[2]/nav/div/div[2]/div/div[3]')))
 
 # Click on the people role
 people_role = wd.find_element(By.XPATH, '//*[@id="react-root"]/div/div/div[2]/main/div/div/div/div/div/div[1]/div[1]/div[2]/nav/div/div[2]/div/div[3]').click()
+time.sleep(3)
 
 # Wait till the accounts loads
 WebDriverWait(wd, 10).until(EC.presence_of_element_located((By.XPATH, '//*[@id="react-root"]/div/div/div[2]/main/div/div/div/div/div/div[3]/section/div/div/div[1]/div/div/button/div/div[2]/div[1]/div[1]/div/div[1]/a/div/div[1]/span')))
 
 # Select the first result
 account = wd.find_element(By.XPATH, '//*[@id="react-root"]/div/div/div[2]/main/div/div/div/div/div/div[3]/section/div/div/div[1]/div/div/button/div/div[2]/div[1]/div[1]/div/div[1]/a/div/div[1]/span').click()
+time.sleep(3)
 
 # Wait till the posts load
 WebDriverWait(wd, 10).until(EC.presence_of_element_located((By.XPATH, '//*[@id="react-root"]/div/div/div[2]/main/div/div/div/div/div/div[3]/div/div/section/div/div/div[1]/div/div/article/div/div/div[2]/div[2]')))
