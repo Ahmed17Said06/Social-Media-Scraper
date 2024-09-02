@@ -18,6 +18,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 from bs4 import BeautifulSoup
 import pandas as pd
 import time
+from selenium.common.exceptions import NoSuchElementException
 
 
 # Options
@@ -71,8 +72,9 @@ try:
     email_next_button = wd.find_element(By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[2]/div/div/div/button').click()
     time.sleep(3)
 
-except:
-    pass 
+except NoSuchElementException:
+    # Handle the case when the username input box is not found
+    pass # Do nothing and continue with the rest of the code
 
 # Find the password input box
 password_box = wd.find_element(By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[1]/div/div/div[3]/div/label/div/div[2]/div[1]/input')
