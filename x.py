@@ -173,14 +173,6 @@ def scrape_tweets(wd):
         return scraped_data
     
     
-    
-    # # Define the columns for the DataFrame
-    # columns = ['status_id', 'text', 'datetime', 'images', 'links', 'embed_links']
-    
-    # # Initialize an empty DataFrame with the specified columns
-    # df = pd.DataFrame(columns=columns)
-    
-    
     def add_to_dataframe(status_id, scraped_data):
         global df
         # Create a new DataFrame row with the scraped data
@@ -268,38 +260,48 @@ def scrape_tweets(wd):
         time.sleep(1)
 
 
+# Define the columns for the DataFrame
+columns = ['status_id', 'text', 'datetime', 'images', 'links', 'embed_links']
+
+# Initialize an empty DataFrame with the specified columns
+df = pd.DataFrame(columns=columns)
+
+
 def main():
-    
-    # Fill the below account details used to login to X.com
+    # Define login credentials and target account
     login_email = ''
     login_username = ''
     login_password = ''
-
-    # Account to scrape
-    target_account = '@Cristiano' # Barak Obama # Bill Gates # Cristiano Ronaldo
-
+    target_account = '@Cristiano'
+    
     # Create WebDriver instance
-    driver = create_webdriver()
-
+    wd = create_webdriver()
+    
     try:
-        # Login to X
-        login_to_x(driver, login_email, login_username, login_password)
-
-        # Search for target account
-        search_account(driver, target_account)
-
+        # Login to X.com
+        login_to_x(wd, login_email, login_username, login_password)
+        
+        # Search for the target account
+        search_account(wd, target_account)
+        
         # Navigate to the account's profile
-        navigate_to_account_profile(driver)
-
+        navigate_to_account_profile(wd)
+        
         # Scrape tweets from the profile
-        scrape_tweets(driver)
+        scrape_tweets(wd)
+        
+        # Save scraped data to a CSV file (optional)
+        df.to_csv(f'{target_account}_tweets.csv', index=False)
+        
+        print(f"Scraping completed. Data saved to {target_account}_tweets.csv.")
     
     finally:
-        # Close the WebDriver instance
-        driver.quit()
+        # Quit WebDriver instance
+        wd.quit()
 
 if __name__ == '__main__':
     main()
+
 
 
 # next steps
