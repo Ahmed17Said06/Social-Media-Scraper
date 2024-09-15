@@ -19,7 +19,7 @@ from bs4 import BeautifulSoup
 import pandas as pd
 import time
 from selenium.common.exceptions import NoSuchElementException
-
+import threading
 
 
 
@@ -54,7 +54,7 @@ def login_to_x(wd, login_email, login_username, login_password):
     time.sleep(3)
     
     # Click on email next button
-    email_next_button = wd.find_element(By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div/div/div/button[2]').click()
+    wd.find_element(By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div/div/div/button[2]').click()
     time.sleep(3)
     
     try:
@@ -66,7 +66,7 @@ def login_to_x(wd, login_email, login_username, login_password):
         time.sleep(3)
         
         # Click on username next button
-        email_next_button = wd.find_element(By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[2]/div/div/div/button').click()
+        wd.find_element(By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[2]/div/div/div/button').click()
         time.sleep(3)
     
     except NoSuchElementException:
@@ -81,7 +81,7 @@ def login_to_x(wd, login_email, login_username, login_password):
     time.sleep(3)
     
     # Click on login button
-    login_next_button = wd.find_element(By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[2]/div/div[1]/div/div/button').click()
+    wd.find_element(By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[2]/div/div[1]/div/div/button').click()
     
 
 def search_account(wd, target_account):    
@@ -90,7 +90,7 @@ def search_account(wd, target_account):
     time.sleep(2)
     
     # Click on the search button
-    search_button = wd.find_element(By.XPATH, '//*[@id="react-root"]/div/div/div[2]/header/div/div/div/div[1]/div[2]/nav/a[2]/div/div').click()
+    wd.find_element(By.XPATH, '//*[@id="react-root"]/div/div/div[2]/header/div/div/div/div[1]/div[2]/nav/a[2]/div/div').click()
     
     # Wait till the search box loads
     WebDriverWait(wd, 10).until(EC.presence_of_element_located((By.XPATH, '//*[@id="react-root"]/div/div/div[2]/main/div/div/div/div/div/div[1]/div[1]/div[1]/div/div/div/div/div[1]/div[2]/div/div/div/form/div[1]/div/div/div/div/div[2]/div/input')))
@@ -113,93 +113,104 @@ def navigate_to_account_profile(wd):
     WebDriverWait(wd, 10).until(EC.presence_of_element_located((By.XPATH, '//*[@id="react-root"]/div/div/div[2]/main/div/div/div/div/div/div[1]/div[1]/div[2]/nav/div/div[2]/div/div[3]')))
     
     # Click on the people role
-    people_role = wd.find_element(By.XPATH, '//*[@id="react-root"]/div/div/div[2]/main/div/div/div/div/div/div[1]/div[1]/div[2]/nav/div/div[2]/div/div[3]').click()
+    wd.find_element(By.XPATH, '//*[@id="react-root"]/div/div/div[2]/main/div/div/div/div/div/div[1]/div[1]/div[2]/nav/div/div[2]/div/div[3]').click()
     time.sleep(3)
     
     # Wait till the accounts loads
     WebDriverWait(wd, 10).until(EC.presence_of_element_located((By.XPATH, '//*[@id="react-root"]/div/div/div[2]/main/div/div/div/div/div/div[3]/section/div/div/div[1]/div/div/button/div/div[2]/div[1]/div[1]/div/div[1]/a/div/div[1]/span')))
     
     # Select the first result
-    account = wd.find_element(By.XPATH, '//*[@id="react-root"]/div/div/div[2]/main/div/div/div/div/div/div[3]/section/div/div/div[1]/div/div/button/div/div[2]/div[1]/div[1]/div/div[1]/a/div/div[1]/span').click()
+    wd.find_element(By.XPATH, '//*[@id="react-root"]/div/div/div[2]/main/div/div/div/div/div/div[3]/section/div/div/div[1]/div/div/button/div/div[2]/div[1]/div[1]/div/div[1]/a/div/div[1]/span').click()
     time.sleep(3)
     
     # Wait till the posts load
     WebDriverWait(wd, 10).until(EC.presence_of_element_located((By.XPATH, '//*[@id="react-root"]/div/div/div[2]/main/div/div/div/div/div/div[3]/div/div/section/div/div/div[1]/div/div/article/div/div/div[2]/div[2]')))
 
-def scrape_tweets(wd):
-    def scrape(html_content):
-        
-        # Import HTML to python
-        soup = BeautifulSoup(html_content, 'lxml')
+
+
+# Define the columns for the DataFrame
+columns = ['status_id', 'text', 'datetime', 'images', 'links', 'embed_links']
+
+# Initialize an empty DataFrame with the specified columns
+df = pd.DataFrame(columns=columns)
+
+
+def scrape(html_content):
     
-        # Scraping post text
-        post_text_div = soup.find('div', class_ = 'css-146c3p1 r-bcqeeo r-1ttztb7 r-qvutc0 r-37j5jr r-1inkyih r-16dba41 r-bnwqim r-135wba7')
-        post_text = post_text_div.text.strip() if post_text_div else None
+    # Import HTML to python
+    soup = BeautifulSoup(html_content, 'lxml')
+
+    # Scraping post text
+    post_text_div = soup.find('div', class_ = 'css-146c3p1 r-bcqeeo r-1ttztb7 r-qvutc0 r-37j5jr r-1inkyih r-16dba41 r-bnwqim r-135wba7')
+    post_text = post_text_div.text.strip() if post_text_div else None
+
+    # Scraping post datetime
+    post_datetime_div = soup.find('a', class_ = 'css-1jxf684 r-bcqeeo r-1ttztb7 r-qvutc0 r-poiln3 r-xoduu5 r-1q142lx r-1w6e6rj r-9aw3ui r-3s2u2q r-1loqt21')
+    post_datetime = post_datetime_div.text if post_datetime_div else None
+
+    # Scraping the images
+    post_images_div = soup.find_all('img', {'alt': 'Image'})
     
-        # Scraping post datetime
-        post_datetime_div = soup.find('a', class_ = 'css-1jxf684 r-bcqeeo r-1ttztb7 r-qvutc0 r-poiln3 r-xoduu5 r-1q142lx r-1w6e6rj r-9aw3ui r-3s2u2q r-1loqt21')
-        post_datetime = post_datetime_div.text if post_datetime_div else None
+    # Extract the src attribute, which contains the image URL
+    post_images = [img['src'] for img in post_images_div]
+
+
+    # Scraping links
+    post_links_div = soup.find_all('a', class_='css-175oi2r r-1udh08x r-13qz1uu r-o7ynqc r-6416eg r-1ny4l3l r-1loqt21')
     
-        # Scraping the images
-        post_images_div = soup.find_all('img', {'alt': 'Image'})
-        
-        # Extract the src attribute, which contains the image URL
-        post_images = [img['src'] for img in post_images_div]
+    # Extract the href attribute from each link
+    post_links = [a['href'] for a in post_links_div]
+
+
+    # Scraping Embed Posts
+    post_embed_links_div = soup.find_all('a', class_='css-146c3p1 r-bcqeeo r-1ttztb7 r-qvutc0 r-37j5jr r-a023e6 r-rjixqe r-16dba41 r-1loqt21')
     
+    # Filter and build the list of post embed links
+    post_embed_links = [
+         f"https://x.com{a['href']}" for a in post_embed_links_div if '/status/' in a['href']
+     ]
+
+
+    scraped_data = {
+             'text': post_text,
+             'datetime': post_datetime,
+             'images': post_images,
+             'links': post_links,
+             'embed_links': post_embed_links
+             }
+    return scraped_data
+
+
+def add_to_dataframe(status_id, scraped_data):
+    global df
+    # Create a new DataFrame row with the scraped data
+    new_row = pd.DataFrame({
+        'status_id': [status_id],
+        'text': [scraped_data['text']],
+        'datetime': [scraped_data['datetime']],
+        'images': [scraped_data['images']],
+        'links': [scraped_data['links']],
+        'embed_links': [scraped_data['embed_links']]
+    })
     
-        # Scraping links
-        post_links_div = soup.find_all('a', class_='css-175oi2r r-1udh08x r-13qz1uu r-o7ynqc r-6416eg r-1ny4l3l r-1loqt21')
-        
-        # Extract the href attribute from each link
-        post_links = [a['href'] for a in post_links_div]
-    
-    
-        # Scraping Embed Posts
-        post_embed_links_div = soup.find_all('a', class_='css-146c3p1 r-bcqeeo r-1ttztb7 r-qvutc0 r-37j5jr r-a023e6 r-rjixqe r-16dba41 r-1loqt21')
-        
-        # Filter and build the list of post embed links
-        post_embed_links = [
-             f"https://x.com{a['href']}" for a in post_embed_links_div if '/status/' in a['href']
-         ]
-    
-    
-        scraped_data = {
-                 'text': post_text,
-                 'datetime': post_datetime,
-                 'images': post_images,
-                 'links': post_links,
-                 'embed_links': post_embed_links
-                 }
-        return scraped_data
-    
-    
-    def add_to_dataframe(status_id, scraped_data):
-        global df
-        # Create a new DataFrame row with the scraped data
-        new_row = pd.DataFrame({
-            'status_id': [status_id],
-            'text': [scraped_data['text']],
-            'datetime': [scraped_data['datetime']],
-            'images': [scraped_data['images']],
-            'links': [scraped_data['links']],
-            'embed_links': [scraped_data['embed_links']]
-        })
-        
-        # Append the new row to the existing DataFrame
-        df = pd.concat([df, new_row], ignore_index=True)
-        
-        
+    # Append the new row to the existing DataFrame
+    df = pd.concat([df, new_row], ignore_index=True)
+
+
+
+def scrape_tweets(wd, num_tweets = 1):
     articles = wd.find_elements(By.XPATH, "//article[@data-testid='tweet']")
     
     print(len(articles))
     
-    tweets  = 0
+    tweets_counter = 0
     
     visited_tweets = {}
     
     wait = WebDriverWait(wd, 10) 
     
     articles = wd.find_elements(By.XPATH, "//article[@data-testid='tweet']")
+    
     while True:
         articles = wd.find_elements(By.XPATH, "//article[@data-testid='tweet']")
         for i in range(len(articles)):
@@ -217,10 +228,6 @@ def scrape_tweets(wd):
                     continue
                 
                 print(f"Clicking on post {status_id}")
-                
-                # Mark as visited
-                visited_tweets[status_id] = True
-                
                 
                 # Wait until the tweet text div is clickable and then click it
                 tweet_text = article.find_element(By.XPATH, ".//div[@data-testid='tweetText']")
@@ -246,13 +253,20 @@ def scrape_tweets(wd):
                 # Scroll down to load more tweets
                 wd.execute_script('window.scrollBy(0,500);')
                 time.sleep(5)
+
+                # Mark as visited
+                visited_tweets[status_id] = True                
+                tweets_counter += 1
+                
+                if tweets_counter >= num_tweets:
+                    break                
                 
             except Exception as e:
                 print(f"Error occurred while processing post {i + 1}: {e}")
                 time.sleep(1) 
                     
         # Break the loop if you've visited enough tweets
-        if len(visited_tweets) > 10:
+        if tweets_counter >= num_tweets:
             break
     
         print(f"articles length now is {len(articles)}")
@@ -260,19 +274,14 @@ def scrape_tweets(wd):
         time.sleep(1)
 
 
-# Define the columns for the DataFrame
-columns = ['status_id', 'text', 'datetime', 'images', 'links', 'embed_links']
-
-# Initialize an empty DataFrame with the specified columns
-df = pd.DataFrame(columns=columns)
-
 
 def main():
     # Define login credentials and target account
     login_email = ''
     login_username = ''
     login_password = ''
-    target_account = '@Cristiano'
+    target_accounts = ['@Cristiano', '@neymarjr', '@KevinDeBruyne']
+    tweets_number = 3
     
     # Create WebDriver instance
     wd = create_webdriver()
@@ -282,18 +291,18 @@ def main():
         login_to_x(wd, login_email, login_username, login_password)
         
         # Search for the target account
-        search_account(wd, target_account)
+        search_account(wd, target_accounts[0])
         
         # Navigate to the account's profile
         navigate_to_account_profile(wd)
         
         # Scrape tweets from the profile
-        scrape_tweets(wd)
+        scrape_tweets(wd, tweets_number)
         
         # Save scraped data to a CSV file (optional)
-        df.to_csv(f'{target_account}_tweets.csv', index=False)
+        df.to_csv(f'{target_accounts[0]}_tweets.csv', index=False)
         
-        print(f"Scraping completed. Data saved to {target_account}_tweets.csv.")
+        print(f"Scraping completed. Data saved to {target_accounts[0]}_tweets.csv.")
     
     finally:
         # Quit WebDriver instance
