@@ -20,12 +20,12 @@ import pandas as pd
 import time
 from selenium.common.exceptions import NoSuchElementException
 import threading
+import os
 
 
 
 # Options
 def setup_chrome_options():
-    
     chrome_options = Options()
     chrome_options.add_argument('--no-sandbox')                # A security mechanism for separating running websites to avoid potential system failures.
     chrome_options.add_argument('--disable-dev-shm-usage')     # A shared memory concept that allows multiple processes to access the same data.
@@ -34,14 +34,25 @@ def setup_chrome_options():
 
 # intialize the webdriver
 def create_webdriver():    
-    # Creating WebDriver instance
     chrome_options = setup_chrome_options()
     return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
+
+
+
+# Modify the DataFrame to be thread-specific
+def create_dataframe():
+    # Define the columns for the DataFrame
+    columns = ['status_id', 'text', 'datetime', 'images', 'links', 'embed_links']
+    
+    # Initialize an empty DataFrame with the specified columns
+    return pd.DataFrame(columns=columns)
+
 
 # Login function
 def login_to_x(wd, login_email, login_username, login_password):
 
-    wd.get("https://x.com/i/flow/login")    
+    wd.get("https://x.com/i/flow/login")
+    
     time.sleep(3)
     # Assertion statement
     assert "Log in to X" in wd.title
@@ -128,13 +139,6 @@ def navigate_to_account_profile(wd):
 
 
 
-# Define the columns for the DataFrame
-columns = ['status_id', 'text', 'datetime', 'images', 'links', 'embed_links']
-
-# Initialize an empty DataFrame with the specified columns
-df = pd.DataFrame(columns=columns)
-
-
 def scrape(html_content):
     
     # Import HTML to python
@@ -181,8 +185,7 @@ def scrape(html_content):
     return scraped_data
 
 
-def add_to_dataframe(status_id, scraped_data):
-    global df
+def add_to_dataframe(df, status_id, scraped_data):
     # Create a new DataFrame row with the scraped data
     new_row = pd.DataFrame({
         'status_id': [status_id],
@@ -194,11 +197,11 @@ def add_to_dataframe(status_id, scraped_data):
     })
     
     # Append the new row to the existing DataFrame
-    df = pd.concat([df, new_row], ignore_index=True)
+    return pd.concat([df, new_row], ignore_index=True)
 
 
 
-def scrape_tweets(wd, num_tweets = 1):
+def scrape_tweets(wd, df, num_tweets = 1):
     articles = wd.find_elements(By.XPATH, "//article[@data-testid='tweet']")
     
     print(len(articles))
@@ -242,7 +245,7 @@ def scrape_tweets(wd, num_tweets = 1):
                 scraped_data = scrape(html_content)
                 
                 # Add to DataFrame
-                add_to_dataframe(status_id, scraped_data)
+                df = add_to_dataframe(df, status_id, scraped_data)
                 
                 
                 # Wait until the back button is clickable and then click it
@@ -272,43 +275,57 @@ def scrape_tweets(wd, num_tweets = 1):
         print(f"articles length now is {len(articles)}")
         wd.execute_script('window.scrollBy(0,500);')
         time.sleep(1)
+    return df
+        
 
-
-
-def main():
-    # Define login credentials and target account
-    login_email = ''
-    login_username = ''
-    login_password = ''
-    target_accounts = ['@Cristiano', '@neymarjr', '@KevinDeBruyne']
-    tweets_number = 3
-    
-    # Create WebDriver instance
+# Process an account in a separate thread
+def process_account(target_account, login_email, login_username, login_password, tweets_number):
     wd = create_webdriver()
+    df = create_dataframe()
+    
+    
+    csv_path = r'./archive'
+    if not os.path.exists(csv_path):
+        os.makedirs(csv_path)
+        
     
     try:
-        # Login to X.com
         login_to_x(wd, login_email, login_username, login_password)
-        
-        # Search for the target account
-        search_account(wd, target_accounts[0])
-        
-        # Navigate to the account's profile
+        search_account(wd, target_account)
         navigate_to_account_profile(wd)
+        df = scrape_tweets(wd, df, tweets_number)
         
-        # Scrape tweets from the profile
-        scrape_tweets(wd, tweets_number)
+        # Save the DataFrame to a CSV file in the archive folder
+        file_name = os.path.join(csv_path, f'{target_account}_tweets.csv')
+        df.to_csv(file_name, index=False)
+        print(f"Scraping completed for {target_account}. Data saved to {file_name}.")
         
-        # Save scraped data to a CSV file (optional)
-        df.to_csv(f'{target_accounts[0]}_tweets.csv', index=False)
-        
-        print(f"Scraping completed. Data saved to {target_accounts[0]}_tweets.csv.")
-    
     finally:
-        # Quit WebDriver instance
         wd.quit()
+    
+    
 
-if __name__ == '__main__':
+# Main function to start threading
+def main():
+    login_email = 'socialmediascrape@gmail.com'
+    login_username = '@socialmedi51534'
+    login_password = 'thisis_B0T'
+    target_accounts = ['Kylian Mbappé', 'Cristiano Ronaldo', 'Kevin De Bruyne', 'Zlatan Ibrahimovic', 'Neymar Jr', 'Vini Jr.', 'Bill Gates', 'NASA', 'Donald Trump', 'Barack Obama']
+    tweets_number = 5
+
+    threads = []
+        
+    # Start separate threads for each account
+    for account in target_accounts:
+        thread = threading.Thread(target=process_account, args=(account, login_email, login_username, login_password, tweets_number))
+        threads.append(thread)
+        thread.start()
+
+    # Wait for all threads to finish
+    for thread in threads:
+        thread.join()
+
+if __name__ == "__main__":
     main()
 
 
