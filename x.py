@@ -61,7 +61,7 @@ def login_to_x(wd, login_email, login_username, login_password):
         wd.get("https://x.com/i/flow/login")
     
     
-    time.sleep(random.randint(1, 10))
+    time.sleep(random.randint(5, 25))
     
     WebDriverWait(wd, 40).until(EC.presence_of_element_located((By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div/div/div/div[4]/label/div/div[2]/div/input')))
     # Find the email input box
@@ -245,6 +245,10 @@ def scrape_tweets(wd, df, num_tweets = 1):
                 wd.execute_script("arguments[0].click();", tweet_text)
     
                 # Get page source and scrape data
+                # time.sleep(1)
+                tweet_text = WebDriverWait(wd, 40).until(
+                    EC.visibility_of_element_located((By.XPATH, ".//div[@data-testid='tweetText']"))
+                )                
                 html_content = wd.page_source
                 scraped_data = scrape(html_content)
                 
@@ -258,7 +262,7 @@ def scrape_tweets(wd, df, num_tweets = 1):
                 back_button.click()
                 
                 # Scroll down to load more tweets
-                wd.execute_script('window.scrollBy(0,500);')
+                # wd.execute_script('window.scrollBy(0,150);') # here
                 # time.sleep(1)
 
                 # Mark as visited
@@ -283,15 +287,9 @@ def scrape_tweets(wd, df, num_tweets = 1):
         
 
 # Process an account in a separate thread
-def process_account(target_account, login_email, login_username, login_password, tweets_number):
+def process_account(target_account, login_email, login_username, login_password, tweets_number, csv_path):
     wd = create_webdriver()
     df = create_dataframe()
-    
-    
-    csv_path = r'./archive'
-    if not os.path.exists(csv_path):
-        os.makedirs(csv_path)
-        
     
     try:
         login_to_x(wd, login_email, login_username, login_password)
@@ -299,9 +297,11 @@ def process_account(target_account, login_email, login_username, login_password,
         navigate_to_account_profile(wd)
         df = scrape_tweets(wd, df, tweets_number)
         
+        df_sorted = df.sort_values(by='status_id', ascending=False)
+        
         # Save the DataFrame to a CSV file in the archive folder
         file_name = os.path.join(csv_path, f'{target_account}_tweets.csv')
-        df.to_csv(file_name, index=False)
+        df_sorted.to_csv(file_name, index=False)
         print(f"Scraping completed for {target_account}. Data saved to {file_name}.")
         
     finally:
@@ -310,26 +310,33 @@ def process_account(target_account, login_email, login_username, login_password,
     
 # Main function to start threading
 def main():
-    login_email = 'socialmediascrape@gmail.com'
-    login_username = '@socialmedi51534'
-    login_password = 'thisis_B0T'
+    login_email = ''
+    login_username = ''
+    login_password = ''
     target_accounts = ['Kylian Mbappé', 'Cristiano Ronaldo', 'Kevin De Bruyne', 'Zlatan Ibrahimovic', 'Neymar Jr', 'Vini Jr.', 'Bill Gates', 'NASA', 'Donald Trump', 'Barack Obama']
-    # target_accounts = ['Kylian Mbappé']
-    tweets_number = 3
-
+    #target_accounts = ['Kylian Mbappé']
+    tweets_number = 10
+    
+    
+    csv_path = r'./archive'
+    if not os.path.exists(csv_path):
+        os.makedirs(csv_path)
+        
     threads = []
         
     # Start separate threads for each account
     for account in target_accounts:
-        time.sleep(random.randint(1, 10))
-        thread = threading.Thread(target=process_account, args=(account, login_email, login_username, login_password, tweets_number))
+        time.sleep(random.randint(5, 25))
+        thread = threading.Thread(target=process_account, args=(account, login_email, login_username, login_password, tweets_number, csv_path))
         threads.append(thread)
         thread.start()
 
     # Wait for all threads to finish
     for thread in threads:
         thread.join()
-
+        
+    print("Scraping completed for all accounts.")
+    
 if __name__ == "__main__":
     main()
 
@@ -342,3 +349,5 @@ if __name__ == "__main__":
 # - The data-base needed 
 # - Make the web app
   
+# Current issues
+# first tweet doesn't appear in the .csv file
