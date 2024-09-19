@@ -20,15 +20,16 @@ import pandas as pd
 import time
 from selenium.common.exceptions import NoSuchElementException
 from selenium.common.exceptions import TimeoutException
+from selenium.common.exceptions import StaleElementReferenceException
 import threading
 import os
 import random
 
 
-
 # Options
 def setup_chrome_options():
     chrome_options = Options()
+    #chrome_options.add_argument('--headless')                  # No GUI
     chrome_options.add_argument('--no-sandbox')                # A security mechanism for separating running websites to avoid potential system failures.
     chrome_options.add_argument('--disable-dev-shm-usage')     # A shared memory concept that allows multiple processes to access the same data.
     return chrome_options
@@ -50,56 +51,63 @@ def create_dataframe():
 
 
 # Login function
-def login_to_x(wd, login_email, login_username, login_password):
+def login_to_x(wd, login_email, login_username, login_password, max_retries=3):
     
-    wd.get("https://x.com/i/flow/login")
+    retries = 0
     
-    try:
-        WebDriverWait(wd, 40).until(EC.title_contains("Log in to X"))
-    except TimeoutException:
-        print("Login page did not load within expected time. Retrying...")
-        wd.get("https://x.com/i/flow/login")
-    
-    
-    time.sleep(random.randint(5, 25))
-    
-    WebDriverWait(wd, 40).until(EC.presence_of_element_located((By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div/div/div/div[4]/label/div/div[2]/div/input')))
-    # Find the email input box
-    email_box = wd.find_element(By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div/div/div/div[4]/label/div/div[2]/div/input')     
-    # Enter email 
-    email_box.send_keys(login_email)
-    
-    WebDriverWait(wd, 40).until(EC.presence_of_element_located((By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div/div/div/button[2]')))
-    # Click on email next button
-    wd.find_element(By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div/div/div/button[2]').click()
-
-    
-    try:
-        # Find the username input box
-        WebDriverWait(wd, 40).until(EC.presence_of_element_located((By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[1]/div/div[2]/label/div/div[2]/div/input')))
-        username_box = wd.find_element(By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[1]/div/div[2]/label/div/div[2]/div/input')
+    while retries < max_retries:
+        time.sleep(random.randint(0, 25))
+        try:
+            wd.get("https://x.com/i/flow/login")
+            
+            WebDriverWait(wd, 40).until(EC.title_contains("Log in to X"))
+            
+            WebDriverWait(wd, 40).until(EC.presence_of_element_located((By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div/div/div/div[4]/label/div/div[2]/div/input')))
+            # Find the email input box
+            email_box = wd.find_element(By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div/div/div/div[4]/label/div/div[2]/div/input')     
+            # Enter email 
+            email_box.send_keys(login_email)
+            
+            WebDriverWait(wd, 40).until(EC.presence_of_element_located((By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div/div/div/button[2]')))
+            # Click on email next button
+            wd.find_element(By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div/div/div/button[2]').click()
         
-        # Enter username
-        username_box.send_keys(login_username)
+            try:
+                # Find the username input box
+                WebDriverWait(wd, 40).until(EC.presence_of_element_located((By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[1]/div/div[2]/label/div/div[2]/div/input')))
+                username_box = wd.find_element(By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[1]/div/div[2]/label/div/div[2]/div/input')
+                
+                # Enter username
+                username_box.send_keys(login_username)
+                
+                # Click on username next button
+                WebDriverWait(wd, 40).until(EC.presence_of_element_located((By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[2]/div/div/div/button')))
+                wd.find_element(By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[2]/div/div/div/button').click()
+            
+            except NoSuchElementException:
+                # Handle the case when the username input box is not found
+                pass # Do nothing and continue with the rest of the code
+            
+            # Find the password input box
+            WebDriverWait(wd, 40).until(EC.presence_of_element_located((By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[1]/div/div/div[3]/div/label/div/div[2]/div[1]/input')))
+            password_box = wd.find_element(By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[1]/div/div/div[3]/div/label/div/div[2]/div[1]/input')
+            
+            # Enter password
+            password_box.send_keys(login_password)
+            
+            # Click on login button
+            WebDriverWait(wd, 40).until(EC.presence_of_element_located((By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[2]/div/div[1]/div/div/button')))
+            wd.find_element(By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[2]/div/div[1]/div/div/button').click()
+            
+            return True
         
-        # Click on username next button
-        WebDriverWait(wd, 40).until(EC.presence_of_element_located((By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[2]/div/div/div/button')))
-        wd.find_element(By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[2]/div/div/div/button').click()
-    
-    except NoSuchElementException:
-        # Handle the case when the username input box is not found
-        pass # Do nothing and continue with the rest of the code
-    
-    # Find the password input box
-    WebDriverWait(wd, 40).until(EC.presence_of_element_located((By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[1]/div/div/div[3]/div/label/div/div[2]/div[1]/input')))
-    password_box = wd.find_element(By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[1]/div/div/div[3]/div/label/div/div[2]/div[1]/input')
-    
-    # Enter password
-    password_box.send_keys(login_password)
-    
-    # Click on login button
-    WebDriverWait(wd, 40).until(EC.presence_of_element_located((By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[2]/div/div[1]/div/div/button')))
-    wd.find_element(By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[2]/div/div[1]/div/div/button').click()
+        except (TimeoutException, NoSuchElementException) as e:
+            print(f"Login attempt {retries + 1} failed: {str(e)}. Retrying...")
+            retries += 1
+            time.sleep(random.randint(10, 60))  # Random delay before retrying
+        
+    print("Login failed after maximum retries.")
+    return False
     
 
 def search_account(wd, target_account):    
@@ -202,87 +210,86 @@ def add_to_dataframe(df, status_id, scraped_data):
     return pd.concat([df, new_row], ignore_index=True)
 
 
-
-def scrape_tweets(wd, df, num_tweets = 1):
+def scrape_tweets(wd, df, num_tweets = 1, max_retries=3):
     
     WebDriverWait(wd, 40).until(EC.presence_of_element_located((By.XPATH, "//article[@data-testid='tweet']")))
-    articles = wd.find_elements(By.XPATH, "//article[@data-testid='tweet']")
-    
-    print(len(articles))
     
     tweets_counter = 0
     
     visited_tweets = {}
     wait = WebDriverWait(wd, 40)
-    WebDriverWait(wd, 40).until(EC.presence_of_element_located((By.XPATH, "//article[@data-testid='tweet']")))
-    articles = wd.find_elements(By.XPATH, "//article[@data-testid='tweet']")
-    
-    while True:
-        articles = wd.find_elements(By.XPATH, "//article[@data-testid='tweet']")
-        for i in range(len(articles)):
-            try:
-                # Relocate the article element to avoid stale reference
-                WebDriverWait(wd, 40).until(EC.presence_of_element_located((By.XPATH, "//article[@data-testid='tweet']")))
-                articles = wd.find_elements(By.XPATH, "//article[@data-testid='tweet']")
-                article = articles[i]
-                
-                # Extract the status ID from the tweet URL
-                tweet_url = article.find_element(By.XPATH, ".//a[contains(@href, '/status/')]").get_attribute('href')
-                status_id = tweet_url.split('/status/')[1]
-                
-                if visited_tweets.get(status_id):
-                    # print(f"Skipping post {status_id} as it was visited before.")
-                    continue
-                
-                print(f"Clicking on post {status_id}")
-                
-                # Wait until the tweet text div is clickable and then click it
-                WebDriverWait(wd, 40).until(EC.presence_of_element_located((By.XPATH, ".//div[@data-testid='tweetText']")))
-                tweet_text = article.find_element(By.XPATH, ".//div[@data-testid='tweetText']")
-                wait.until(EC.element_to_be_clickable(tweet_text))
-                
-                # tweet_text.click()
-                wd.execute_script("arguments[0].click();", tweet_text)
-    
-                # Get page source and scrape data
-                # time.sleep(1)
-                tweet_text = WebDriverWait(wd, 40).until(
-                    EC.visibility_of_element_located((By.XPATH, ".//div[@data-testid='tweetText']"))
-                )                
-                html_content = wd.page_source
-                scraped_data = scrape(html_content)
-                
-                # Add to DataFrame
-                df = add_to_dataframe(df, status_id, scraped_data)
-                
-                
-                # Wait until the back button is clickable and then click it
-                WebDriverWait(wd, 40).until(EC.presence_of_element_located((By.XPATH, "//button[@data-testid='app-bar-back']")))
-                back_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@data-testid='app-bar-back']")))
-                back_button.click()
-                
-                # Scroll down to load more tweets
-                # wd.execute_script('window.scrollBy(0,150);') # here
-                # time.sleep(1)
 
-                # Mark as visited
-                visited_tweets[status_id] = True                
-                tweets_counter += 1
+    while tweets_counter < num_tweets:
+        retry_counter = 0  # Initialize the retry counter
+        while retry_counter < max_retries:            
+            try: 
+                articles = wd.find_elements(By.XPATH, "//article[@data-testid='tweet']")
                 
-                if tweets_counter >= num_tweets:
-                    break                
-                
-            except Exception as e:
-                print(f"Error occurred while processing post {i + 1}: {e}")
-                # time.sleep(1) 
+                for i in range(len(articles)):
+                    try:
+                        
+                        # Re-locate the article element to avoid stale reference
+                        article = WebDriverWait(wd, 40).until(EC.presence_of_element_located(
+                            (By.XPATH, f"(//article[@data-testid='tweet'])[{i + 1}]")))  # Re-locate specific tweet
+                        
+                        # Extract the status ID from the tweet URL
+                        tweet_url = article.find_element(By.XPATH, ".//a[contains(@href, '/status/')]").get_attribute('href')
+                        status_id = tweet_url.split('/status/')[1]
+                        
+                        if visited_tweets.get(status_id):
+                            continue
+                        
+                        # Wait until the tweet text div is clickable and then click it
+                        WebDriverWait(wd, 40).until(EC.presence_of_element_located((By.XPATH, ".//div[@data-testid='tweetText']")))
+                        tweet_text = article.find_element(By.XPATH, ".//div[@data-testid='tweetText']")
+                        wait.until(EC.element_to_be_clickable(tweet_text))
+                        
+                        # tweet_text.click()
+                        wd.execute_script("arguments[0].click();", tweet_text)
+            
+                        # Get page source and scrape data
+                        tweet_text = WebDriverWait(wd, 40).until(
+                            EC.visibility_of_element_located((By.XPATH, ".//div[@data-testid='tweetText']"))
+                        )
+                        
+                        html_content = wd.page_source
+                        scraped_data = scrape(html_content)
+                        
+                        # Add to DataFrame
+                        df = add_to_dataframe(df, status_id, scraped_data)
+                        
+                        # Mark as visited
+                        visited_tweets[status_id] = True                
+                        tweets_counter += 1
+                        
+                        # Wait until the back button is clickable and then click it
+                        WebDriverWait(wd, 40).until(EC.presence_of_element_located((By.XPATH, "//button[@data-testid='app-bar-back']")))
+                        back_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@data-testid='app-bar-back']")))
+                        back_button.click()
+                        
+                        
+                        if tweets_counter >= num_tweets:
+                            break                
+                        
+                    except (StaleElementReferenceException, IndexError) as e:
+                        print(f"Error occurred while processing post {i + 1}: {e}")
+                        sleep_duration = random.uniform(1, 5)  # Random sleep between 1 and 5 seconds
+                        print(f"Retrying after {sleep_duration} seconds...")
+                        time.sleep(sleep_duration)
+                        continue
                     
-        # Break the loop if you've visited enough tweets
-        if tweets_counter >= num_tweets:
-            break
-    
-        print(f"articles length now is {len(articles)}")
+                break # Break the retry loop if no errors
+                    
+            except Exception as e:
+                print(f"General error: {e}")
+                retry_counter += 1
+                if retry_counter >= max_retries:
+                    print(f"Exceeded maximum retries for current operation.")
+                    break  # Exit retry loop after max retries
+                        
         wd.execute_script('window.scrollBy(0,500);')
-        # time.sleep(1)
+        time.sleep(random.uniform(0.5, 2))  # Add random waits after scrolling
+        
     return df
         
 
@@ -310,13 +317,15 @@ def process_account(target_account, login_email, login_username, login_password,
     
 # Main function to start threading
 def main():
+    
     login_email = ''
     login_username = ''
     login_password = ''
-    target_accounts = ['Kylian Mbappé', 'Cristiano Ronaldo', 'Kevin De Bruyne', 'Zlatan Ibrahimovic', 'Neymar Jr', 'Vini Jr.', 'Bill Gates', 'NASA', 'Donald Trump', 'Barack Obama']
-    #target_accounts = ['Kylian Mbappé']
-    tweets_number = 10
     
+    #target_accounts = ['Kylian Mbappé', 'Cristiano Ronaldo', 'Kevin De Bruyne', 'Zlatan Ibrahimovic', 'Neymar Jr', 'Vini Jr.', 'Bill Gates', 'NASA', 'Donald Trump', 'Barack Obama']
+    target_accounts = ['Kylian Mbappé', 'Cristiano Ronaldo', 'Kevin De Bruyne', 'Zlatan Ibrahimovic', 'Neymar Jr', 'Vini Jr.']
+    #target_accounts = ['Kylian Mbappé']
+    tweets_number = 5
     
     csv_path = r'./archive'
     if not os.path.exists(csv_path):
@@ -326,7 +335,7 @@ def main():
         
     # Start separate threads for each account
     for account in target_accounts:
-        time.sleep(random.randint(5, 25))
+        # time.sleep(random.randint(5, 25))
         thread = threading.Thread(target=process_account, args=(account, login_email, login_username, login_password, tweets_number, csv_path))
         threads.append(thread)
         thread.start()
