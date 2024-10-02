@@ -26,10 +26,20 @@ import os
 import random
 
 
+user_agents = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Safari/605.1.15",
+    "Mozilla/5.0 (Linux; Android 11; Pixel 5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Mobile Safari/537.36",
+    # Add more User-Agent strings as needed
+]
+
 # Options
 def setup_chrome_options():
+    user_agent = random.choice(user_agents)  # Randomly select a User-Agent
     chrome_options = Options()
-    #chrome_options.add_argument('--headless')                  # No GUI
+    chrome_options.add_argument(f"user-agent={user_agent}")
+    
+    chrome_options.add_argument('--headless')                  # No GUI
     chrome_options.add_argument('--no-sandbox')                # A security mechanism for separating running websites to avoid potential system failures.
     chrome_options.add_argument('--disable-dev-shm-usage')     # A shared memory concept that allows multiple processes to access the same data.
     return chrome_options
@@ -104,6 +114,8 @@ def login_to_x(wd, login_email, login_username, login_password, max_retries=3):
         except (TimeoutException, NoSuchElementException) as e:
             print(f"Login attempt {retries + 1} failed: {str(e)}. Retrying...")
             retries += 1
+            
+            wd.get("about:blank") # This will go to the browser's default home page
             time.sleep(random.randint(10, 60))  # Random delay before retrying
         
     print("Login failed after maximum retries.")
@@ -210,7 +222,7 @@ def add_to_dataframe(df, status_id, scraped_data):
     return pd.concat([df, new_row], ignore_index=True)
 
 
-def scrape_tweets(wd, df, num_tweets = 1, max_retries=3):
+def scrape_tweets(wd, df, num_tweets = 1, latest_status_id = None, max_retries=3):
     
     WebDriverWait(wd, 40).until(EC.presence_of_element_located((By.XPATH, "//article[@data-testid='tweet']")))
     
@@ -227,7 +239,6 @@ def scrape_tweets(wd, df, num_tweets = 1, max_retries=3):
                 
                 for i in range(len(articles)):
                     try:
-                        
                         # Re-locate the article element to avoid stale reference
                         article = WebDriverWait(wd, 40).until(EC.presence_of_element_located(
                             (By.XPATH, f"(//article[@data-testid='tweet'])[{i + 1}]")))  # Re-locate specific tweet
@@ -235,6 +246,11 @@ def scrape_tweets(wd, df, num_tweets = 1, max_retries=3):
                         # Extract the status ID from the tweet URL
                         tweet_url = article.find_element(By.XPATH, ".//a[contains(@href, '/status/')]").get_attribute('href')
                         status_id = tweet_url.split('/status/')[1]
+                        
+                        # If the tweet is older than the latest scraped tweet, stop scraping
+                        if latest_status_id and int(status_id) <= int(latest_status_id):
+                            print(f"Encountered tweet {status_id} which is older or same as latest status_id {latest_status_id}. Stopping scrape.")
+                            return df                        
                         
                         if visited_tweets.get(status_id):
                             continue
@@ -298,18 +314,47 @@ def process_account(target_account, login_email, login_username, login_password,
     wd = create_webdriver()
     df = create_dataframe()
     
+    
+    # Save the DataFrame to a CSV file in the archive folder
+    file_name = os.path.join(csv_path, f'{target_account}_tweets.csv')
+    
+    # Get the highest status_id from the CSV (if it exists)
+    latest_status_id = None
+    
+    if os.path.exists(file_name):
+        try:
+            existing_df = pd.read_csv(file_name)
+            latest_status_id = existing_df['status_id'].max()
+            print(f"Loaded latest status_id {latest_status_id} for {target_account}.")
+        except Exception as e:
+            print(f"Error loading existing CSV: {e}")        
     try:
         login_to_x(wd, login_email, login_username, login_password)
         search_account(wd, target_account)
         navigate_to_account_profile(wd)
-        df = scrape_tweets(wd, df, tweets_number)
         
-        df_sorted = df.sort_values(by='status_id', ascending=False)
         
-        # Save the DataFrame to a CSV file in the archive folder
-        file_name = os.path.join(csv_path, f'{target_account}_tweets.csv')
-        df_sorted.to_csv(file_name, index=False)
-        print(f"Scraping completed for {target_account}. Data saved to {file_name}.")
+        
+        # Scrape tweets, but stop if the tweet's status_id is less than or equal to the latest_status_id
+        df = scrape_tweets(wd, df, tweets_number, latest_status_id)
+        
+        #df = scrape_tweets(wd, df, tweets_number)
+        
+        if not df.empty:
+            df_sorted = df.sort_values(by='status_id', ascending=False)
+            
+            # Append new tweets to the existing CSV
+            if os.path.exists(file_name):
+                df_sorted.to_csv(file_name, mode='a', header=False, index=False)
+            else:
+                df_sorted.to_csv(file_name, index=False)
+                
+            print(f"Scraping completed for {target_account}. New data saved to {file_name}.")
+        else:
+            print(f"No new tweets found for {target_account}.")
+        
+        # df_sorted.to_csv(file_name, index=False)
+        # print(f"Scraping completed for {target_account}. Data saved to {file_name}.")
         
     finally:
         wd.quit()
@@ -330,6 +375,7 @@ def main():
     csv_path = r'./archive'
     if not os.path.exists(csv_path):
         os.makedirs(csv_path)
+        
         
     threads = []
         
