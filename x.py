@@ -27,11 +27,22 @@ import random
 
 
 user_agents = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Safari/605.1.15",
-    "Mozilla/5.0 (Linux; Android 11; Pixel 5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Mobile Safari/537.36",
-    # Add more User-Agent strings as needed
+    # Windows
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 11.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Edge/116.0.0.0 Safari/537.36",
+    
+    # Linux
+    "Mozilla/5.0 (X11; Ubuntu; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) Gecko/20100101 Firefox/116.0",
+
+    # macOS
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 12_6_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.4 Safari/605.1.15",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_4) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Safari/605.1.15",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 11_6_8) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.5 Safari/605.1.15"
 ]
+
 
 # Options
 def setup_chrome_options():
@@ -66,48 +77,50 @@ def login_to_x(wd, login_email, login_username, login_password, max_retries=3):
     retries = 0
     
     while retries < max_retries:
-        time.sleep(random.randint(0, 25))
+        time.sleep(random.randint(0, 60))
         try:
             wd.get("https://x.com/i/flow/login")
+            #wd.get("https://x.com")
             
             WebDriverWait(wd, 40).until(EC.title_contains("Log in to X"))
             
-            WebDriverWait(wd, 40).until(EC.presence_of_element_located((By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div/div/div/div[4]/label/div/div[2]/div/input')))
+            WebDriverWait(wd, 40).until(EC.presence_of_element_located((By.XPATH, '/html/body/div/div/div/div[1]/div/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div/div/div/div[4]/label/div/div[2]/div/input')))
+            
             # Find the email input box
-            email_box = wd.find_element(By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div/div/div/div[4]/label/div/div[2]/div/input')     
+            email_box = wd.find_element(By.XPATH, '/html/body/div/div/div/div[1]/div/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div/div/div/div[4]/label/div/div[2]/div/input')     
             # Enter email 
             email_box.send_keys(login_email)
             
-            WebDriverWait(wd, 40).until(EC.presence_of_element_located((By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div/div/div/button[2]')))
+            WebDriverWait(wd, 40).until(EC.presence_of_element_located((By.XPATH, '/html/body/div/div/div/div[1]/div/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div/div/div/button[2]')))
             # Click on email next button
-            wd.find_element(By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div/div/div/button[2]').click()
-        
+            wd.find_element(By.XPATH, '/html/body/div/div/div/div[1]/div/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div/div/div/button[2]').click()
+            
             try:
                 # Find the username input box
-                WebDriverWait(wd, 40).until(EC.presence_of_element_located((By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[1]/div/div[2]/label/div/div[2]/div/input')))
-                username_box = wd.find_element(By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[1]/div/div[2]/label/div/div[2]/div/input')
+                WebDriverWait(wd, 40).until(EC.presence_of_element_located((By.XPATH, '/html/body/div/div/div/div[1]/div/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[1]/div/div[2]/label/div/div[2]/div/input')))
+                username_box = wd.find_element(By.XPATH, '/html/body/div/div/div/div[1]/div/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[1]/div/div[2]/label/div/div[2]/div/input')
                 
                 # Enter username
                 username_box.send_keys(login_username)
                 
                 # Click on username next button
-                WebDriverWait(wd, 40).until(EC.presence_of_element_located((By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[2]/div/div/div/button')))
-                wd.find_element(By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[2]/div/div/div/button').click()
+                WebDriverWait(wd, 40).until(EC.presence_of_element_located((By.XPATH, '/html/body/div/div/div/div[1]/div/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[2]/div/div/div/button')))
+                wd.find_element(By.XPATH, '/html/body/div/div/div/div[1]/div/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[2]/div/div/div/button').click()
             
             except NoSuchElementException:
                 # Handle the case when the username input box is not found
                 pass # Do nothing and continue with the rest of the code
             
             # Find the password input box
-            WebDriverWait(wd, 40).until(EC.presence_of_element_located((By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[1]/div/div/div[3]/div/label/div/div[2]/div[1]/input')))
-            password_box = wd.find_element(By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[1]/div/div/div[3]/div/label/div/div[2]/div[1]/input')
+            WebDriverWait(wd, 40).until(EC.presence_of_element_located((By.XPATH, '/html/body/div/div/div/div[1]/div/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[1]/div/div/div[3]/div/label/div/div[2]/div[1]/input')))
+            password_box = wd.find_element(By.XPATH, '/html/body/div/div/div/div[1]/div/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[1]/div/div/div[3]/div/label/div/div[2]/div[1]/input')
             
             # Enter password
             password_box.send_keys(login_password)
             
             # Click on login button
-            WebDriverWait(wd, 40).until(EC.presence_of_element_located((By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[2]/div/div[1]/div/div/button')))
-            wd.find_element(By.XPATH, '//*[@id="layers"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[2]/div/div[1]/div/div/button').click()
+            WebDriverWait(wd, 40).until(EC.presence_of_element_located((By.XPATH, '/html/body/div/div/div/div[1]/div/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[2]/div/div[1]/div/div/button')))
+            wd.find_element(By.XPATH, '/html/body/div/div/div/div[1]/div/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[2]/div/div[1]/div/div/button').click()
             
             return True
         
@@ -116,7 +129,7 @@ def login_to_x(wd, login_email, login_username, login_password, max_retries=3):
             retries += 1
             
             wd.get("about:blank") # This will go to the browser's default home page
-            time.sleep(random.randint(10, 60))  # Random delay before retrying
+            time.sleep(random.randint(0, 60))  # Random delay before retrying
         
     print("Login failed after maximum retries.")
     return False
@@ -338,10 +351,9 @@ def process_account(target_account, login_email, login_username, login_password,
         # Scrape tweets, but stop if the tweet's status_id is less than or equal to the latest_status_id
         df = scrape_tweets(wd, df, tweets_number, latest_status_id)
         
-        #df = scrape_tweets(wd, df, tweets_number)
-        
+            
         if not df.empty:
-            df_sorted = df.sort_values(by='status_id', ascending=False)
+            df_sorted = df.sort_values(by='status_id', ascending=True)
             
             # Append new tweets to the existing CSV
             if os.path.exists(file_name):
@@ -353,8 +365,6 @@ def process_account(target_account, login_email, login_username, login_password,
         else:
             print(f"No new tweets found for {target_account}.")
         
-        # df_sorted.to_csv(file_name, index=False)
-        # print(f"Scraping completed for {target_account}. Data saved to {file_name}.")
         
     finally:
         wd.quit()
@@ -363,12 +373,12 @@ def process_account(target_account, login_email, login_username, login_password,
 # Main function to start threading
 def main():
     
-    login_email = ''
-    login_username = ''
-    login_password = ''
+    login_email = 'socialmediascrape@gmail.com'
+    login_username = '@socialmedi51534'
+    login_password = 'thisis_B0T'
     
-    #target_accounts = ['Kylian Mbappé', 'Cristiano Ronaldo', 'Kevin De Bruyne', 'Zlatan Ibrahimovic', 'Neymar Jr', 'Vini Jr.', 'Bill Gates', 'NASA', 'Donald Trump', 'Barack Obama']
-    target_accounts = ['Kylian Mbappé', 'Cristiano Ronaldo', 'Kevin De Bruyne', 'Zlatan Ibrahimovic', 'Neymar Jr', 'Vini Jr.']
+    target_accounts = ['Kylian Mbappé', 'Cristiano Ronaldo', 'Kevin De Bruyne', 'Zlatan Ibrahimovic', 'Neymar Jr', 'Vini Jr.', 'Bill Gates', 'NASA', 'Donald Trump', 'Barack Obama']
+    #target_accounts = ['Kylian Mbappé', 'Cristiano Ronaldo', 'Kevin De Bruyne', 'Zlatan Ibrahimovic', 'Neymar Jr', 'Vini Jr.']
     #target_accounts = ['Kylian Mbappé']
     tweets_number = 5
     
@@ -397,12 +407,4 @@ if __name__ == "__main__":
 
 
 
-# next steps
-# - Arrange the tweets from latest to oldest >> Done
-# - Make sure you scrape the full text "see more" >> Done
-# - Scrape the other attributes of the post >> Done
-# - The data-base needed 
-# - Make the web app
-  
-# Current issues
-# first tweet doesn't appear in the .csv file
+
