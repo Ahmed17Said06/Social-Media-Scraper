@@ -205,7 +205,7 @@ def search_account(wd, target_account, retries=3, delay=5):
             # Press Enter
             search_box.send_keys(Keys.ENTER)
             
-            return  # If successful, exit the function
+            return True # If successful, exit the function
             
         except (TimeoutException, NoSuchElementException) as e:
             print(f"Error in search_account: {e}. Retrying... ({attempt + 1}/{retries})")
@@ -213,6 +213,7 @@ def search_account(wd, target_account, retries=3, delay=5):
             time.sleep(delay)  # Wait before retrying
     
     print("Failed to search the account after maximum retries.")
+    return False
 
     
 def navigate_to_account_profile(wd, retries=3, delay=5):
@@ -235,7 +236,7 @@ def navigate_to_account_profile(wd, retries=3, delay=5):
             WebDriverWait(wd, 40).until(EC.presence_of_element_located((By.XPATH, '//*[@id="react-root"]/div/div/div[2]/main/div/div/div/div/div/div[3]/div/div/section/div/div/div[1]/div/div/article/div/div/div[2]/div[2]')))
 
             
-            return  # If successful, exit the function
+            return True # If successful, exit the function
             
         except (TimeoutException, NoSuchElementException) as e:
             print(f"Error in navigate_to_account_profile: {e}. Retrying... ({attempt + 1}/{retries})")
@@ -243,7 +244,7 @@ def navigate_to_account_profile(wd, retries=3, delay=5):
             time.sleep(delay)  # Wait before retrying
     
     print("Failed to navigate to the account profile after maximum retries.")
-
+    return False
 
 def scrape(html_content):
     
@@ -413,10 +414,37 @@ def process_account(target_account, login_email, login_username, login_password,
         except Exception as e:
             print(f"Error loading existing CSV: {e}")        
     try:
-        login_to_x(wd, login_email, login_username, login_password)
-        search_account(wd, target_account)
-        navigate_to_account_profile(wd)
         
+        login_to_x(wd, login_email, login_username, login_password)
+        
+        
+        #search_account(wd, target_account)
+        #navigate_to_account_profile(wd)
+        
+        
+        
+       # Trials for searching the account
+        for attempt in range(3):
+            try:
+                search_account(wd, target_account)
+                break  # Exit loop if search succeeds
+            except Exception as e:
+                print(f"Search account failed for {target_account} (Attempt {attempt + 1}/3): {e}.")
+                if attempt == 2:  # If it's the last attempt
+                    print(f"Giving up on searching account for {target_account}.")
+                    return  # Exit the function
+
+        # Trials for navigating to the profile
+        for attempt in range(3):
+            try:
+                navigate_to_account_profile(wd)
+                break  # Exit loop if navigation succeeds
+            except Exception as e:
+                print(f"Navigate to account profile failed for {target_account} (Attempt {attempt + 1}/3): {e}.")
+                login_to_x(wd, login_email, login_username, login_password)
+                if attempt == 2:  # If it's the last attempt
+                    print(f"Giving up on navigating to profile for {target_account}.")
+                    return  # Exit the function
         
         
         # Scrape tweets, but stop if the tweet's status_id is less than or equal to the latest_status_id
@@ -444,9 +472,9 @@ def process_account(target_account, login_email, login_username, login_password,
 # Main function to start threading
 def main():
     
-    login_email = 'socialmediascrape@gmail.com'
-    login_username = '@socialmedi51534'
-    login_password = 'thisis_B0T'
+    login_email = ''
+    login_username = ''
+    login_password = ''
     
     target_accounts = ['Kylian Mbappé', 'Cristiano Ronaldo', 'Kevin De Bruyne', 'Zlatan Ibrahimovic', 'Neymar Jr', 'Vini Jr.', 'Bill Gates', 'NASA', 'Donald Trump', 'Barack Obama']
     #target_accounts = ['Kylian Mbappé', 'Cristiano Ronaldo', 'Kevin De Bruyne', 'Zlatan Ibrahimovic', 'Neymar Jr', 'Vini Jr.']
@@ -459,7 +487,7 @@ def main():
         
 
     # Set the maximum number of concurrent threads
-    max_threads = 6
+    max_threads = 5
     
     # Use ThreadPoolExecutor to limit the number of threads
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_threads) as executor:
@@ -479,5 +507,6 @@ if __name__ == "__main__":
     main()
 
 
+# fix the rate limiting issue
 
 
