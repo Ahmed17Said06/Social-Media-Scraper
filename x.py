@@ -24,6 +24,8 @@ from selenium.common.exceptions import StaleElementReferenceException
 import threading
 import os
 import random
+import json
+import concurrent.futures
 
 
 user_agents = [
@@ -50,7 +52,7 @@ def setup_chrome_options():
     chrome_options = Options()
     chrome_options.add_argument(f"user-agent={user_agent}")
     
-    chrome_options.add_argument('--headless')                  # No GUI
+    #chrome_options.add_argument('--headless')                  # No GUI
     chrome_options.add_argument('--no-sandbox')                # A security mechanism for separating running websites to avoid potential system failures.
     chrome_options.add_argument('--disable-dev-shm-usage')     # A shared memory concept that allows multiple processes to access the same data.
     return chrome_options
@@ -71,17 +73,58 @@ def create_dataframe():
     return pd.DataFrame(columns=columns)
 
 
+# Function to save cookies to a file
+def save_cookies(wd, cookie_file='cookies.json'):
+    with open(cookie_file, 'w') as file:
+        json.dump(wd.get_cookies(), file)
+
+
+
+def load_cookies(wd, cookie_file):
+    # Load cookies from a file
+    try:
+        with open(cookie_file, 'r') as f:
+            cookies = json.load(f)
+        
+        # Navigate to a blank page within the domain context before adding cookies
+        wd.get("https://x.com/")  # Ensure correct domain
+        time.sleep(2)  # Wait for page load
+        
+        for cookie in cookies:
+            try:
+                # Adjust cookie if necessary to remove domain mismatches
+                if "domain" in cookie:
+                    del cookie["domain"]  # Let the browser auto-assign domain
+                wd.add_cookie(cookie)
+            except Exception as e:
+                print(f"Failed to add cookie: {cookie['name']}. Error: {str(e)}")
+        
+        return True
+    except FileNotFoundError:
+        print("Cookies file not found.")
+        return False
+
+
 # Login function
-def login_to_x(wd, login_email, login_username, login_password, max_retries=3):
+def login_to_x(wd, login_email, login_username, login_password, max_retries=3, cookie_file='cookies.json'):
     
     retries = 0
     
     while retries < max_retries:
-        time.sleep(random.randint(0, 60))
-        try:
-            wd.get("https://x.com/i/flow/login")
-            #wd.get("https://x.com")
+        
+        if load_cookies(wd, cookie_file):
+            wd.get("https://x.com")
+            try:
+                WebDriverWait(wd, 10).until(EC.presence_of_element_located((By.XPATH, "/html/body/div[1]/div/div/div[2]/header/div/div/div/div[1]")))
+                print("Already logged in. Cookies loaded successfully.")
+                return True
+            except TimeoutException:
+                print("Not logged in. Proceeding with the login.")
+        else:
+            print("No valid cookies found. Proceeding to manual login.")
             
+        wd.get("https://x.com/i/flow/login")
+        try:
             WebDriverWait(wd, 40).until(EC.title_contains("Log in to X"))
             
             WebDriverWait(wd, 40).until(EC.presence_of_element_located((By.XPATH, '/html/body/div/div/div/div[1]/div/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div/div/div/div[4]/label/div/div[2]/div/input')))
@@ -109,7 +152,7 @@ def login_to_x(wd, login_email, login_username, login_password, max_retries=3):
             
             except NoSuchElementException:
                 # Handle the case when the username input box is not found
-                pass # Do nothing and continue with the rest of the code
+                print("Username input not required.")
             
             # Find the password input box
             WebDriverWait(wd, 40).until(EC.presence_of_element_located((By.XPATH, '/html/body/div/div/div/div[1]/div/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[1]/div/div/div[3]/div/label/div/div[2]/div[1]/input')))
@@ -121,6 +164,11 @@ def login_to_x(wd, login_email, login_username, login_password, max_retries=3):
             # Click on login button
             WebDriverWait(wd, 40).until(EC.presence_of_element_located((By.XPATH, '/html/body/div/div/div/div[1]/div/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[2]/div/div[1]/div/div/button')))
             wd.find_element(By.XPATH, '/html/body/div/div/div/div[1]/div/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[2]/div/div[1]/div/div/button').click()
+            
+            time.sleep(2) # Wait for page load
+            
+            # After successful login, save cookies
+            save_cookies(wd, cookie_file)
             
             return True
         
@@ -135,43 +183,66 @@ def login_to_x(wd, login_email, login_username, login_password, max_retries=3):
     return False
     
 
-def search_account(wd, target_account):    
-    # Wait till the search icon loads
-    WebDriverWait(wd, 40).until(EC.presence_of_element_located((By.XPATH, '//*[@id="react-root"]/div/div/div[2]/header/div/div/div/div[1]/div[2]/nav/a[2]/div/div')))
+def search_account(wd, target_account, retries=3, delay=5):    
+    attempt = 0
+    while attempt < retries:
+        try:
+            # Wait till the search icon loads
+            WebDriverWait(wd, 40).until(EC.presence_of_element_located((By.XPATH, '//*[@id="react-root"]/div/div/div[2]/header/div/div/div/div[1]/div[2]/nav/a[2]/div/div')))
+            
+            # Click on the search button
+            wd.find_element(By.XPATH, '//*[@id="react-root"]/div/div/div[2]/header/div/div/div/div[1]/div[2]/nav/a[2]/div/div').click()
+            
+            # Wait till the search box loads
+            WebDriverWait(wd, 40).until(EC.presence_of_element_located((By.XPATH, '//*[@id="react-root"]/div/div/div[2]/main/div/div/div/div/div/div[1]/div[1]/div[1]/div/div/div/div/div[1]/div[2]/div/div/div/form/div[1]/div/div/div/div/div[2]/div/input')))
+            
+            # Find the search input box
+            search_box = wd.find_element(By.XPATH, '//*[@id="react-root"]/div/div/div[2]/main/div/div/div/div/div/div[1]/div[1]/div[1]/div/div/div/div/div[1]/div[2]/div/div/div/form/div[1]/div/div/div/div/div[2]/div/input')
+            
+            # Enter the target account name into the search box
+            search_box.send_keys(target_account)
+            
+            # Press Enter
+            search_box.send_keys(Keys.ENTER)
+            
+            return  # If successful, exit the function
+            
+        except (TimeoutException, NoSuchElementException) as e:
+            print(f"Error in search_account: {e}. Retrying... ({attempt + 1}/{retries})")
+            attempt += 1
+            time.sleep(delay)  # Wait before retrying
     
-    # Click on the search button
-    wd.find_element(By.XPATH, '//*[@id="react-root"]/div/div/div[2]/header/div/div/div/div[1]/div[2]/nav/a[2]/div/div').click()
-    
-    # Wait till the search box loads
-    WebDriverWait(wd, 40).until(EC.presence_of_element_located((By.XPATH, '//*[@id="react-root"]/div/div/div[2]/main/div/div/div/div/div/div[1]/div[1]/div[1]/div/div/div/div/div[1]/div[2]/div/div/div/form/div[1]/div/div/div/div/div[2]/div/input')))
-    
-    # Find the search input box
-    search_box = wd.find_element(By.XPATH, '//*[@id="react-root"]/div/div/div[2]/main/div/div/div/div/div/div[1]/div[1]/div[1]/div/div/div/div/div[1]/div[2]/div/div/div/form/div[1]/div/div/div/div/div[2]/div/input')
-    
-    # Enter the target account name to the search box
-    search_box.send_keys(target_account)
-    
-    # Press Enter
-    search_box.send_keys(Keys().ENTER)
+    print("Failed to search the account after maximum retries.")
 
     
-# Navigate to the account's profile
-def navigate_to_account_profile(wd):    
-    # Wait till the roles load
-    WebDriverWait(wd, 40).until(EC.presence_of_element_located((By.XPATH, '//*[@id="react-root"]/div/div/div[2]/main/div/div/div/div/div/div[1]/div[1]/div[2]/nav/div/div[2]/div/div[3]')))
-    
-    # Click on the people role
-    wd.find_element(By.XPATH, '//*[@id="react-root"]/div/div/div[2]/main/div/div/div/div/div/div[1]/div[1]/div[2]/nav/div/div[2]/div/div[3]').click()
-    
-    # Wait till the accounts loads
-    WebDriverWait(wd, 40).until(EC.presence_of_element_located((By.XPATH, '//*[@id="react-root"]/div/div/div[2]/main/div/div/div/div/div/div[3]/section/div/div/div[1]/div/div/button/div/div[2]/div[1]/div[1]/div/div[1]/a/div/div[1]/span')))
-    
-    # Select the first result
-    wd.find_element(By.XPATH, '//*[@id="react-root"]/div/div/div[2]/main/div/div/div/div/div/div[3]/section/div/div/div[1]/div/div/button/div/div[2]/div[1]/div[1]/div/div[1]/a/div/div[1]/span').click()
-    
-    # Wait till the posts load
-    WebDriverWait(wd, 40).until(EC.presence_of_element_located((By.XPATH, '//*[@id="react-root"]/div/div/div[2]/main/div/div/div/div/div/div[3]/div/div/section/div/div/div[1]/div/div/article/div/div/div[2]/div[2]')))
+def navigate_to_account_profile(wd, retries=3, delay=5):
+    attempt = 0
+    while attempt < retries:
+        try:
+            # Wait till the roles load
+            WebDriverWait(wd, 40).until(EC.presence_of_element_located((By.XPATH, '//*[@id="react-root"]/div/div/div[2]/main/div/div/div/div/div/div[1]/div[1]/div[2]/nav/div/div[2]/div/div[3]')))
+            
+            # Click on the people role
+            wd.find_element(By.XPATH, '//*[@id="react-root"]/div/div/div[2]/main/div/div/div/div/div/div[1]/div[1]/div[2]/nav/div/div[2]/div/div[3]').click()
+            
+            # Wait till the accounts load
+            WebDriverWait(wd, 40).until(EC.presence_of_element_located((By.XPATH, '//*[@id="react-root"]/div/div/div[2]/main/div/div/div/div/div/div[3]/section/div/div/div[1]/div/div/button/div/div[2]/div[1]/div[1]/div/div[1]/a/div/div[1]/span')))
+            
+            # Select the first result
+            wd.find_element(By.XPATH, '//*[@id="react-root"]/div/div/div[2]/main/div/div/div/div/div/div[3]/section/div/div/div[1]/div/div/button/div/div[2]/div[1]/div[1]/div/div[1]/a/div/div[1]/span').click()
+            
+            # Wait till the posts load
+            WebDriverWait(wd, 40).until(EC.presence_of_element_located((By.XPATH, '//*[@id="react-root"]/div/div/div[2]/main/div/div/div/div/div/div[3]/div/div/section/div/div/div[1]/div/div/article/div/div/div[2]/div[2]')))
 
+            
+            return  # If successful, exit the function
+            
+        except (TimeoutException, NoSuchElementException) as e:
+            print(f"Error in navigate_to_account_profile: {e}. Retrying... ({attempt + 1}/{retries})")
+            attempt += 1
+            time.sleep(delay)  # Wait before retrying
+    
+    print("Failed to navigate to the account profile after maximum retries.")
 
 
 def scrape(html_content):
@@ -386,19 +457,21 @@ def main():
     if not os.path.exists(csv_path):
         os.makedirs(csv_path)
         
-        
-    threads = []
-        
-    # Start separate threads for each account
-    for account in target_accounts:
-        # time.sleep(random.randint(5, 25))
-        thread = threading.Thread(target=process_account, args=(account, login_email, login_username, login_password, tweets_number, csv_path))
-        threads.append(thread)
-        thread.start()
 
-    # Wait for all threads to finish
-    for thread in threads:
-        thread.join()
+    # Set the maximum number of concurrent threads
+    max_threads = 6
+    
+    # Use ThreadPoolExecutor to limit the number of threads
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_threads) as executor:
+        futures = []
+        
+        # Submit tasks to the executor
+        for account in target_accounts:
+            # Schedule the account processing to be executed
+            futures.append(executor.submit(process_account, account, login_email, login_username, login_password, tweets_number, csv_path))
+        
+        # Optionally wait for all threads to complete
+        concurrent.futures.wait(futures)
         
     print("Scraping completed for all accounts.")
     
