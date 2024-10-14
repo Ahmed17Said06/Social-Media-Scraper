@@ -21,11 +21,12 @@ import time
 from selenium.common.exceptions import NoSuchElementException
 from selenium.common.exceptions import TimeoutException
 from selenium.common.exceptions import StaleElementReferenceException
-import threading
 import os
 import random
 import json
 import concurrent.futures
+import requests
+from tqdm import tqdm  # Optional, for progress bar
 
 
 user_agents = [
@@ -52,7 +53,7 @@ def setup_chrome_options():
     chrome_options = Options()
     chrome_options.add_argument(f"user-agent={user_agent}")
     
-    #chrome_options.add_argument('--headless')                  # No GUI
+    chrome_options.add_argument('--headless')                  # No GUI
     chrome_options.add_argument('--no-sandbox')                # A security mechanism for separating running websites to avoid potential system failures.
     chrome_options.add_argument('--disable-dev-shm-usage')     # A shared memory concept that allows multiple processes to access the same data.
     return chrome_options
@@ -249,7 +250,6 @@ def navigate_to_account_profile(wd, retries=3, delay=5):
 
 def scrape(html_content):
     
-    time.sleep(2)
     # Import HTML to python
     soup = BeautifulSoup(html_content, 'lxml')
 
@@ -387,7 +387,7 @@ def scrape_tweets(wd, df, num_tweets = 1, latest_status_id = None, max_retries=3
                 print(f"General error: {e}")
                 retry_counter += 1
                 if retry_counter >= max_retries:
-                    print(f"Exceeded maximum retries for current operation.")
+                    print("Exceeded maximum retries for current operation.")
                     break  # Exit retry loop after max retries
                         
         wd.execute_script('window.scrollBy(0,500);')
@@ -395,6 +395,21 @@ def scrape_tweets(wd, df, num_tweets = 1, latest_status_id = None, max_retries=3
         
     return df
         
+
+def download_images(image_urls, target_account, directory_path):
+    for img_url in tqdm(image_urls, desc=f'Downloading images for {target_account}'):
+        try:
+            img_data = requests.get(img_url).content
+            # Extract image name from URL
+            img_name = os.path.basename(img_url)
+            img_path = os.path.join(directory_path, img_name)
+            with open(img_path, 'wb') as img_file:
+                img_file.write(img_data)
+            print(f"Downloaded: {img_path}")
+        except Exception as e:
+            print(f"Failed to download {img_url}: {e}")
+
+
 
 # Process an account in a separate thread
 def process_account(target_account, login_email, login_username, login_password, tweets_number, csv_path):
@@ -425,31 +440,33 @@ def process_account(target_account, login_email, login_username, login_password,
         
        # Trials for searching the account
         for attempt in range(3):
-            try:
-                search_account(wd, target_account)
+            if search_account(wd, target_account) is True:
                 break  # Exit loop if search succeeds
-            except Exception as e:
-                print(f"Search account failed for {target_account} (Attempt {attempt + 1}/3): {e}.")
+            else:
+                print(f"Search account failed for {target_account} (Attempt {attempt + 1}/3).")
                 if attempt == 2:  # If it's the last attempt
                     print(f"Giving up on searching account for {target_account}.")
                     return  # Exit the function
 
         # Trials for navigating to the profile
         for attempt in range(3):
-            try:
-                navigate_to_account_profile(wd)
+            if navigate_to_account_profile(wd) is True:
                 break  # Exit loop if navigation succeeds
-            except Exception as e:
-                print(f"Navigate to account profile failed for {target_account} (Attempt {attempt + 1}/3): {e}.")
+            else:
+                print(f"Navigate to account profile failed for {target_account} (Attempt {attempt + 1}/3).")
                 login_to_x(wd, login_email, login_username, login_password)
                 if attempt == 2:  # If it's the last attempt
                     print(f"Giving up on navigating to profile for {target_account}.")
                     return  # Exit the function
         
-        
         # Scrape tweets, but stop if the tweet's status_id is less than or equal to the latest_status_id
         df = scrape_tweets(wd, df, tweets_number, latest_status_id)
         
+        # After scraping tweets, download images per post
+        for _, row in df.iterrows():
+            image_urls = row.get('images') 
+            if image_urls:
+                download_images(image_urls, target_account, directory_path)  # Download images immediately for each post
             
         if not df.empty:
             df_sorted = df.sort_values(by='status_id', ascending=True)
@@ -476,10 +493,9 @@ def main():
     login_username = '@socialmedi51534'
     login_password = 'thisis_B0T'
     
-    #target_accounts = ['Kylian Mbappé', 'Cristiano Ronaldo', 'Kevin De Bruyne', 'Zlatan Ibrahimovic', 'Neymar Jr', 'Vini Jr.', 'Bill Gates', 'NASA', 'Donald Trump', 'Barack Obama']
+    target_accounts = ['Kylian Mbappé', 'Cristiano Ronaldo', 'Kevin De Bruyne', 'Zlatan Ibrahimovic', 'Neymar Jr', 'Vini Jr.', 'Bill Gates', 'Elon Musk', 'Donald Trump', 'Barack Obama']
     #target_accounts = ['Kylian Mbappé', 'Cristiano Ronaldo', 'Kevin De Bruyne', 'Zlatan Ibrahimovic', 'Neymar Jr', 'Vini Jr.']
     #target_accounts = ['Kylian Mbappé']
-    target_accounts = ['NASA']
     
     tweets_number = 5
     

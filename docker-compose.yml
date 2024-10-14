@@ -1,0 +1,10 @@
+version: '3.8'
+
+services:
+  scraper:
+    build: .
+    volumes:
+      - ./archive:/app/archive  # Mount the local 'archive' directory to the container
+    environment:
+      - DISPLAY=:99  # Set up display for Chrome
+    command: ["sh", "-c", "Xvfb :99 -ac & python x.py"]  # Run Xvfb for headless mode
