@@ -177,13 +177,13 @@ def login_to_x(wd, login_email, login_username, login_password, max_retries=3, c
             retries += 1
             
             wd.get("about:blank") # This will go to the browser's default home page
-            time.sleep(random.randint(0, 60))  # Random delay before retrying
+            time.sleep(random.randint(0, 30))  # Random delay before retrying
         
     print("Login failed after maximum retries.")
     return False
     
 
-def search_account(wd, target_account, retries=3, delay=5):    
+def search_account(wd, target_account, retries=3, delay=5):   
     attempt = 0
     while attempt < retries:
         try:
@@ -201,6 +201,7 @@ def search_account(wd, target_account, retries=3, delay=5):
             
             # Enter the target account name into the search box
             search_box.send_keys(target_account)
+                    
             
             # Press Enter
             search_box.send_keys(Keys.ENTER)
@@ -248,6 +249,7 @@ def navigate_to_account_profile(wd, retries=3, delay=5):
 
 def scrape(html_content):
     
+    time.sleep(2)
     # Import HTML to python
     soup = BeautifulSoup(html_content, 'lxml')
 
@@ -400,8 +402,11 @@ def process_account(target_account, login_email, login_username, login_password,
     df = create_dataframe()
     
     
+    directory_path = os.path.join(csv_path, target_account)
+    os.makedirs(directory_path, exist_ok=True)
+    
     # Save the DataFrame to a CSV file in the archive folder
-    file_name = os.path.join(csv_path, f'{target_account}_tweets.csv')
+    file_name = os.path.join(directory_path, f'{target_account}_tweets.csv')
     
     # Get the highest status_id from the CSV (if it exists)
     latest_status_id = None
@@ -416,11 +421,6 @@ def process_account(target_account, login_email, login_username, login_password,
     try:
         
         login_to_x(wd, login_email, login_username, login_password)
-        
-        
-        #search_account(wd, target_account)
-        #navigate_to_account_profile(wd)
-        
         
         
        # Trials for searching the account
@@ -472,22 +472,23 @@ def process_account(target_account, login_email, login_username, login_password,
 # Main function to start threading
 def main():
     
-    login_email = ''
-    login_username = ''
-    login_password = ''
+    login_email = 'socialmediascrape@gmail.com'
+    login_username = '@socialmedi51534'
+    login_password = 'thisis_B0T'
     
-    target_accounts = ['Kylian Mbappé', 'Cristiano Ronaldo', 'Kevin De Bruyne', 'Zlatan Ibrahimovic', 'Neymar Jr', 'Vini Jr.', 'Bill Gates', 'NASA', 'Donald Trump', 'Barack Obama']
+    #target_accounts = ['Kylian Mbappé', 'Cristiano Ronaldo', 'Kevin De Bruyne', 'Zlatan Ibrahimovic', 'Neymar Jr', 'Vini Jr.', 'Bill Gates', 'NASA', 'Donald Trump', 'Barack Obama']
     #target_accounts = ['Kylian Mbappé', 'Cristiano Ronaldo', 'Kevin De Bruyne', 'Zlatan Ibrahimovic', 'Neymar Jr', 'Vini Jr.']
     #target_accounts = ['Kylian Mbappé']
+    target_accounts = ['NASA']
+    
     tweets_number = 5
     
     csv_path = r'./archive'
-    if not os.path.exists(csv_path):
-        os.makedirs(csv_path)
+    os.makedirs(csv_path, exist_ok=True)
         
 
     # Set the maximum number of concurrent threads
-    max_threads = 5
+    max_threads = 4
     
     # Use ThreadPoolExecutor to limit the number of threads
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_threads) as executor:
