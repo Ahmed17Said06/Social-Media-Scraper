@@ -1,0 +1,7 @@
+#* * * * * cd /app && DISPLAY=:99 /usr/bin/Xvfb :99 -ac & /usr/local/bin/python -u x.py >> /var/log/cron.log 2>&1
+#* * * * * cd /app && echo "Current directory: $(pwd)" >> /var/log/cron.log 2>&1
+
+*/10 * * * * /usr/local/bin/python -u x.py >> /var/log/cron.log 2>&1
+
+
+

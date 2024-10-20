@@ -330,6 +330,15 @@ def scrape_tweets(wd, df, num_tweets = 1, latest_status_id = None, max_retries=3
                         article = WebDriverWait(wd, 40).until(EC.presence_of_element_located(
                             (By.XPATH, f"(//article[@data-testid='tweet'])[{i + 1}]")))  # Re-locate specific tweet
                         
+                        # escpae pinned posts
+                        try:
+                            pinned = article.find_elements(By.XPATH, ".//div[contains(text(), 'Pinned')]")  # Adjust the XPath according to actual structure
+                            if len(pinned) > 0:
+                                continue
+                        except NoSuchElementException:
+                            # If the pinned element is not found, it means it's not a pinned post
+                            pass
+                                                
                         # Extract the status ID from the tweet URL
                         tweet_url = article.find_element(By.XPATH, ".//a[contains(@href, '/status/')]").get_attribute('href')
                         status_id = tweet_url.split('/status/')[1]
@@ -495,7 +504,8 @@ def main():
     
     target_accounts = ['Kylian Mbappé', 'Cristiano Ronaldo', 'Kevin De Bruyne', 'Zlatan Ibrahimovic', 'Neymar Jr', 'Vini Jr.', 'Bill Gates', 'Elon Musk', 'Donald Trump', 'Barack Obama']
     #target_accounts = ['Kylian Mbappé', 'Cristiano Ronaldo', 'Kevin De Bruyne', 'Zlatan Ibrahimovic', 'Neymar Jr', 'Vini Jr.']
-    #target_accounts = ['Kylian Mbappé']
+    #target_accounts = ['Elon Musk']
+    #target_accounts = ['CNN Breaking News', 'Fox News', 'ABC News', ]
     
     tweets_number = 5
     
