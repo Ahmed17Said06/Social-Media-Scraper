@@ -27,6 +27,9 @@ import json
 import concurrent.futures
 import requests
 from tqdm import tqdm  # Optional, for progress bar
+from pymongo import MongoClient
+from datetime import datetime
+import gridfs
 
 
 user_agents = [
@@ -405,96 +408,96 @@ def scrape_tweets(wd, df, num_tweets = 1, latest_status_id = None, max_retries=3
     return df
         
 
-def download_images(image_urls, target_account, directory_path):
+def download_images(image_urls, target_account, post_status_id, fs):
     for img_url in tqdm(image_urls, desc=f'Downloading images for {target_account}'):
         try:
             img_data = requests.get(img_url).content
-            # Extract image name from URL
+            # Store image in GridFS with additional metadata
             img_name = os.path.basename(img_url)
-            img_path = os.path.join(directory_path, img_name)
-            with open(img_path, 'wb') as img_file:
-                img_file.write(img_data)
-            print(f"Downloaded: {img_path}")
+            fs.put(
+                img_data,
+                filename=img_name,
+                content_type='image/jpeg',  # Change content_type if needed
+                post_status_id=post_status_id,
+                target=target_account  # Save the target account as metadata
+            )
+            print(f"Uploaded to GridFS: {img_name}")
         except Exception as e:
             print(f"Failed to download {img_url}: {e}")
 
 
 
 # Process an account in a separate thread
-def process_account(target_account, login_email, login_username, login_password, tweets_number, csv_path):
+def process_account(target_account, login_email, login_username, login_password, tweets_number, db, fs):
     wd = create_webdriver()
     df = create_dataframe()
-    
-    
-    directory_path = os.path.join(csv_path, target_account)
-    os.makedirs(directory_path, exist_ok=True)
-    
-    # Save the DataFrame to a CSV file in the archive folder
-    file_name = os.path.join(directory_path, f'{target_account}_tweets.csv')
-    
-    # Get the highest status_id from the CSV (if it exists)
-    latest_status_id = None
-    
-    if os.path.exists(file_name):
-        try:
-            existing_df = pd.read_csv(file_name)
-            latest_status_id = existing_df['status_id'].max()
-            print(f"Loaded latest status_id {latest_status_id} for {target_account}.")
-        except Exception as e:
-            print(f"Error loading existing CSV: {e}")        
-    try:
-        
-        login_to_x(wd, login_email, login_username, login_password)
-        
-        
-       # Trials for searching the account
-        for attempt in range(3):
-            if search_account(wd, target_account) is True:
-                break  # Exit loop if search succeeds
-            else:
-                print(f"Search account failed for {target_account} (Attempt {attempt + 1}/3).")
-                if attempt == 2:  # If it's the last attempt
-                    print(f"Giving up on searching account for {target_account}.")
-                    return  # Exit the function
 
-        # Trials for navigating to the profile
+    collection = db[target_account]
+    
+    # Get the highest status_id from MongoDB
+    latest_status_id = None
+    latest_record = collection.find_one(sort=[("status_id", -1)])  # Adjusted to match your DataFrame's column name
+
+    if latest_record:
+        latest_status_id = latest_record["status_id"]
+        print(f"Loaded latest status_id {latest_status_id} for {target_account} from MongoDB.")
+
+    try:
+        login_to_x(wd, login_email, login_username, login_password)
+
+        # Search for the account with retries
         for attempt in range(3):
-            if navigate_to_account_profile(wd) is True:
-                break  # Exit loop if navigation succeeds
-            else:
-                print(f"Navigate to account profile failed for {target_account} (Attempt {attempt + 1}/3).")
-                login_to_x(wd, login_email, login_username, login_password)
-                if attempt == 2:  # If it's the last attempt
-                    print(f"Giving up on navigating to profile for {target_account}.")
-                    return  # Exit the function
+            if search_account(wd, target_account):
+                break
+            print(f"Search failed for {target_account} (Attempt {attempt + 1}/3).")
+            if attempt == 2:
+                return
         
-        # Scrape tweets, but stop if the tweet's status_id is less than or equal to the latest_status_id
+        # Navigate to the account profile with retries
+        for attempt in range(3):
+            if navigate_to_account_profile(wd):
+                break
+            print(f"Navigate to profile failed for {target_account} (Attempt {attempt + 1}/3).")
+            login_to_x(wd, login_email, login_username, login_password)
+            if attempt == 2:
+                return
+
+        # Scrape tweets, stopping at the latest status_id
         df = scrape_tweets(wd, df, tweets_number, latest_status_id)
         
-        # After scraping tweets, download images per post
-        for _, row in df.iterrows():
-            image_urls = row.get('images') 
-            if image_urls:
-                download_images(image_urls, target_account, directory_path)  # Download images immediately for each post
-            
         if not df.empty:
-            df_sorted = df.sort_values(by='status_id', ascending=True)
-            
-            # Append new tweets to the existing CSV
-            if os.path.exists(file_name):
-                df_sorted.to_csv(file_name, mode='a', header=False, index=False)
-            else:
-                df_sorted.to_csv(file_name, index=False)
+            for index, row in df.iterrows():
+                post_data = {
+                    "account": target_account,
+                    "tweet": row['text'],
+                    "status_id": row['status_id'],
+                    "timestamp": row['datetime'],  # Adjust this to match your DataFrame column name
+                    "images": row['images'],
+                    "links": row['links'],  # Include links if applicable
+                    "embed_links": row['embed_links'],  # Include embed_links if applicable
+                    "platform": "X.com"
+                }
                 
-            print(f"Scraping completed for {target_account}. New data saved to {file_name}.")
+                # Upsert to avoid duplicates
+                collection.update_one(
+                    {"status_id": row['status_id'], "platform": "X.com"},
+                    {"$set": post_data},
+                    upsert=True
+                )
+                
+                # Download images for each post if they exist
+                image_urls = row.get('images')
+                if image_urls:
+                    download_images(image_urls, target_account, row['status_id'] ,fs)  # Adjust this call if necessary for GridFS
+                
+            print(f"Scraping and data save completed for {target_account}.")
         else:
             print(f"No new tweets found for {target_account}.")
-        
-        
+
     finally:
         wd.quit()
-    
-    
+
+
 # Main function to start threading
 def main():
     
@@ -505,10 +508,11 @@ def main():
     target_accounts = ['Kylian Mbappé', 'Cristiano Ronaldo', 'Kevin De Bruyne', 'Zlatan Ibrahimovic', 'Neymar Jr', 'Vini Jr.', 'Bill Gates', 'Elon Musk', 'Donald Trump', 'Barack Obama', 'Fox News', 'ABC News']
     
     tweets_number = 5
-    
-    csv_path = r'./archive'
-    os.makedirs(csv_path, exist_ok=True)
-        
+
+    client = MongoClient("mongodb://localhost:27017/")
+    db = client['scraped_data_db']
+    fs = gridfs.GridFS(db)
+
 
     # Set the maximum number of concurrent threads
     max_threads = 4
@@ -520,7 +524,7 @@ def main():
         # Submit tasks to the executor
         for account in target_accounts:
             # Schedule the account processing to be executed
-            futures.append(executor.submit(process_account, account, login_email, login_username, login_password, tweets_number, csv_path))
+            futures.append(executor.submit(process_account, account, login_email, login_username, login_password, tweets_number, db, fs))
         
         # Optionally wait for all threads to complete
         concurrent.futures.wait(futures)
@@ -531,6 +535,6 @@ if __name__ == "__main__":
     main()
 
 
-# fix the rate limiting issue
+
 
 
