@@ -9,3 +9,16 @@ services:
     environment:
       - DISPLAY=:99
     command: ["sh", "-c", "cron && Xvfb :99 -ac & tail -f /var/log/cron.log"]
+    depends_on:
+      - mongo
+
+  mongo:
+    image: mongo:latest
+    container_name: mongo-db
+    volumes:
+      - mongo_data:/data/db  # To persist data on host
+    ports:
+      - "27017:27017"  # Expose MongoDB port
+
+volumes:
+  mongo_data:

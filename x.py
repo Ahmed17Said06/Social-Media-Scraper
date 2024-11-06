@@ -509,7 +509,7 @@ def main():
     
     tweets_number = 5
 
-    client = MongoClient("mongodb://localhost:27017/")
+    client = MongoClient("mongodb://mongo:27017/")
     db = client['scraped_data_db']
     fs = gridfs.GridFS(db)
 
