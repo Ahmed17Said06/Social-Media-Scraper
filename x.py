@@ -505,7 +505,7 @@ def main():
     login_username = '@socialmedi51534'
     login_password = 'thisis_B0T'
     
-    target_accounts = ['Kylian Mbappé', 'Cristiano Ronaldo', 'Kevin De Bruyne', 'Zlatan Ibrahimovic', 'Neymar Jr', 'Vini Jr.', 'Bill Gates', 'Elon Musk', 'Donald Trump', 'Barack Obama', 'Fox News', 'ABC News']
+    target_accounts = ['kylian mbappe', 'Cristiano Ronaldo', 'Kevin De Bruyne', 'Zlatan Ibrahimovic', 'Neymar Jr', 'Vini Jr.', 'Bill Gates', 'Elon Musk', 'Donald Trump', 'Barack Obama', 'Fox News', 'ABC News']
     
     tweets_number = 5
 
