@@ -1,11 +1,13 @@
 import asyncio
 import os
-from playwright.async_api import async_playwright
+from playwright.async_api import async_playwright, BrowserContext, Page, Playwright
 
 # File to save the session state
 STORAGE_FILE = "instagram_session.json"
 
-async def login_to_instagram(username, password, browser):
+# Login function
+async def login_to_instagram(username: str, password: str, browser) -> BrowserContext:
+    """Log in to Instagram or load a saved session."""
     # Load session if available
     if os.path.exists(STORAGE_FILE):
         print("Loading saved session...")
@@ -44,51 +46,72 @@ async def login_to_instagram(username, password, browser):
 
     return context
 
-
-async def search_target(context, target):
+# Profile scraping function
+async def scrape_profile(context: BrowserContext, profile_link: str):
+    """Visit and scrape a profile using the provided link."""
     page = await context.new_page()
 
-    # Navigate to Instagram
-    await page.goto("https://www.instagram.com/")
-    print("Loaded Instagram")
+    # Navigate to the profile link
+    await page.goto(profile_link)
+    print(f"Opened profile: {profile_link}")
 
-    # Wait for the search icon or bar to appear
-    search_icon_selector = 'svg[aria-label="Search"]'
-    await page.wait_for_selector(search_icon_selector)
-
-    # Focus on the search bar
-    await page.click(search_icon_selector)
-    print("Search icon clicked")
-
-    # Type the target's name in the search bar
-    search_bar_selector = "input[placeholder='Search']"
-    await page.fill(search_bar_selector, target)
-    print(f"Searching for: {target}")
-
-    # Wait for the first search result to appear
-    first_result_xpath = "/html/body/div[1]/div/div/div[2]/div/div/div[1]/div[1]/div[2]/div/div/div[2]/div/div/div[2]/div/div/div[2]/div/a[1]/div[1]"
-    await page.wait_for_selector(f'xpath={first_result_xpath}')
-
-    # Click on the first search result
-    await page.click(f'xpath={first_result_xpath}')
-    print("Clicked the first search result")
-
-    # Wait for the target's profile page to load
+    # Wait for the profile page to load
     await page.wait_for_selector("header")
-    print(f"Opened profile for: {target}")
+    print(f"Profile page loaded: {profile_link}")
 
-    # Optional: Keep the browser open for inspection
-    await asyncio.sleep(10)
+    # Optional: Add scraping logic here for bio, posts, etc.
+    await asyncio.sleep(5)  # Simulate scraping delay
 
+    # Close the page
+    await page.close()
 
+# Concurrency management function
+async def scrape_profiles_concurrently(profile_links: list, context: BrowserContext, max_concurrent_tasks: int = 4):
+    """Scrape multiple profiles concurrently with a task limit."""
+    semaphore = asyncio.Semaphore(max_concurrent_tasks)
 
+    async def scrape_with_limit(link):
+        async with semaphore:
+            await scrape_profile(context, link)
 
+    # Create tasks for scraping
+    tasks = [scrape_with_limit(link) for link in profile_links]
+    await asyncio.gather(*tasks)
 
+# Main function
 async def main():
     # Instagram credentials
     username = "socialmedi51534"
     password = "thisis_B0T"
-    target_name = "Cristiano Ronaldo"
+
+    # List of profile links to scrape
+    profile_links = [
+        "https://www.instagram.com/cristiano/",  # Cristiano Ronaldo
+        "https://www.instagram.com/leomessi/",   # Lionel Messi
+        "https://www.instagram.com/neymarjr/",   # Neymar Jr.
+        "https://www.instagram.com/kyliejenner/",  # Kylie Jenner
+        "https://www.instagram.com/therock/",   # Dwayne 'The Rock' Johnson
+        "https://www.instagram.com/kimkardashian/",  # Kim Kardashian
+        "https://www.instagram.com/arianagrande/",  # Ariana Grande
+        "https://www.instagram.com/selenagomez/",  # Selena Gomez
+        "https://www.instagram.com/beyonce/",  # Beyoncé
+        "https://www.instagram.com/justinbieber/",  # Justin Bieber
+        "https://www.instagram.com/taylorswift/",  # Taylor Swift
+        "https://www.instagram.com/nike/",  # Nike
+        "https://www.instagram.com/nationalgeographic/",  # National Geographic
+        "https://www.instagram.com/khaby00/",  # Khaby Lame
+        "https://www.instagram.com/virat.kohli/",  # Virat Kohli
+        "https://www.instagram.com/jlo/",  # Jennifer Lopez
+        "https://www.instagram.com/iamcardib/",  # Cardi B
+        "https://www.instagram.com/kevinhart4real/",  # Kevin Hart
+        "https://www.instagram.com/kingjames/",  # LeBron James
+        "https://www.instagram.com/dualipa/",  # Dua Lipa
+        "https://www.instagram.com/eminem/",  # Eminem
+        "https://www.instagram.com/badgalriri/",  # Rihanna
+        "https://www.instagram.com/rogerfederer/",  # Roger Federer
+        "https://www.instagram.com/chrishemsworth/",  # Chris Hemsworth
+        "https://www.instagram.com/shakira/",  # Shakira
+    ]
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=False)
@@ -96,8 +119,8 @@ async def main():
         # Log in or load session
         context = await login_to_instagram(username, password, browser)
         if context:
-            # Perform the search
-            await search_target(context, target_name)
+            # Scrape profiles concurrently
+            await scrape_profiles_concurrently(profile_links, context)
 
             # Close the context
             await context.close()
@@ -105,8 +128,5 @@ async def main():
         # Close the browser
         await browser.close()
 
-
 if __name__ == "__main__":
     asyncio.run(main())
-
-
