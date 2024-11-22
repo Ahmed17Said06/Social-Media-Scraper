@@ -55,16 +55,6 @@ async def login_to_instagram(username, password):
         # Close the browser
         await browser.close()
 
-if __name__ == "__main__":
-    # Replace with your Instagram credentials
-    username = "your_username"
-    password = "your_password"
-    asyncio.run(login_to_instagram(username, password))
-
-
-
-
-
 
 if __name__ == "__main__":
     # Replace with your Instagram credentials
