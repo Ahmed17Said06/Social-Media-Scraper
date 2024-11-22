@@ -130,3 +130,9 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
+
+# post text >> /html/body/div[7]/div[1]/div/div[3]/div/div/div/div/div[2]/div/article/div/div[2]/div/div/div[2]/div[1]/ul/div[1]/li/div/div/div[2]/div[1]
+# post video or image >> /html/body/div[7]/div[1]/div/div[3]/div/div/div/div/div[2]/div/article/div/div[1]
+
+# /html/body/div[7]/div[1]/div/div[3]/div/div/div/div/div[2]/div/article/div/div[1]/div/div[1]/div[2]/div/div/div/ul/li[2]/div/div/div/div/div[1]/img
