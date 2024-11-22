@@ -52,24 +52,24 @@ async def search_target(context, target):
     await page.goto("https://www.instagram.com/")
     print("Loaded Instagram")
 
-    # Wait for the search icon or bar to appear using aria-label
-    await page.wait_for_selector('svg[aria-label="Search"]')
+    # Wait for the search icon or bar to appear
+    search_icon_selector = 'svg[aria-label="Search"]'
+    await page.wait_for_selector(search_icon_selector)
 
     # Focus on the search bar
-    search_icon_selector = 'svg[aria-label="Search"]'
     await page.click(search_icon_selector)
     print("Search icon clicked")
 
     # Type the target's name in the search bar
-    search_bar_selector = "input[placeholder='Search']"  # Adjust if necessary
+    search_bar_selector = "input[placeholder='Search']"
     await page.fill(search_bar_selector, target)
     print(f"Searching for: {target}")
 
-    # Wait for the search results to load
-    await asyncio.sleep(3)  # Adjust wait time as needed
+    # Wait for the first search result to appear
+    first_result_xpath = "/html/body/div[1]/div/div/div[2]/div/div/div[1]/div[1]/div[2]/div/div/div[2]/div/div/div[2]/div/div/div[2]/div/a[1]/div[1]"
+    await page.wait_for_selector(f'xpath={first_result_xpath}')
 
     # Click on the first search result
-    first_result_xpath = "/html/body/div[1]/div/div/div[2]/div/div/div[1]/div[1]/div[2]/div/div/div[2]/div/div/div[2]/div/div/div[2]/div/a[1]/div[1]"
     await page.click(f'xpath={first_result_xpath}')
     print("Clicked the first search result")
 
@@ -78,7 +78,8 @@ async def search_target(context, target):
     print(f"Opened profile for: {target}")
 
     # Optional: Keep the browser open for inspection
-    await asyncio.sleep(10000000000000000000000000000)
+    await asyncio.sleep(10)
+
 
 
 
