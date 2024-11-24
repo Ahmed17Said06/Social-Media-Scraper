@@ -1,6 +1,7 @@
 import asyncio
 import os
 from playwright.async_api import async_playwright, BrowserContext, Page, Playwright
+import csv
 
 # File to save the session state
 STORAGE_FILE = "instagram_session.json"
@@ -21,7 +22,7 @@ async def login_to_instagram(username: str, password: str, browser) -> BrowserCo
         print("Opened Instagram")
 
         # Wait for the login page to load
-        await page.wait_for_selector("input[name='username']")
+        await page.wait_for_selector("input[name='username']", timeout=10000)
 
         # Fill in the login form
         await page.fill("input[name='username']", username)
@@ -34,7 +35,7 @@ async def login_to_instagram(username: str, password: str, browser) -> BrowserCo
 
         # Wait for navigation or confirmation
         try:
-            await page.wait_for_selector("nav", timeout=10000)
+            await page.wait_for_selector("nav", timeout=15000)  # Increase timeout
             print("Login successful")
 
             # Save the session state
@@ -46,7 +47,6 @@ async def login_to_instagram(username: str, password: str, browser) -> BrowserCo
 
     return context
 
-# Profile scraping function
 async def scrape_profile(context: BrowserContext, profile_link: str):
     """Visit and scrape a profile using the provided link."""
     page = await context.new_page()
@@ -59,11 +59,85 @@ async def scrape_profile(context: BrowserContext, profile_link: str):
     await page.wait_for_selector("header")
     print(f"Profile page loaded: {profile_link}")
 
-    # Optional: Add scraping logic here for bio, posts, etc.
-    await asyncio.sleep(5)  # Simulate scraping delay
+    await asyncio.sleep(1)
 
-    # Close the page
+    # Open the first post (to start scraping)
+    first_post = await page.query_selector('a[href*="/p/"]')
+    if first_post:
+        await first_post.click()
+        print("Clicked on the first post to open it.")
+        
+        await page.wait_for_selector('div._a9zs', timeout=15000)  # Wait for the caption to load
+    else:
+        print("No posts found on the profile.")
+        return  # Exit if no posts are available
+
+    posts_data = []
+    try:
+        while True:
+            # Wait for elements to load properly (post caption, datetime, and image)
+            post_caption = await page.query_selector('div._a9zs h1')  # Post caption
+            post_datetime = await page.query_selector('time._a9ze')  # Post date/time
+            post_image = await page.query_selector('article img')  # Image in the post
+
+            # Extract data from elements
+            caption = await post_caption.inner_text() if post_caption else None
+            datetime = await post_datetime.get_attribute('datetime') if post_datetime else None
+            image_url = await post_image.get_attribute('src') if post_image else None
+
+            post_data = {
+                'caption': caption,
+                'datetime': datetime,
+                'image_url': image_url
+            }
+            posts_data.append(post_data)
+            print(f"Scraped post: {post_data}")
+
+            # Try clicking the next post if available (right arrow)
+            next_button = await page.query_selector('svg[aria-label="Next"]')  # Right arrow
+
+            if next_button:
+                await next_button.click()
+                print("Moved to the next post.")
+                await page.wait_for_selector('div._a9zs')  # Wait for next post to load
+            else:
+                print("No more posts found.")
+                break  # Exit loop if no next post is available
+
+    except Exception as e:
+        print(f"Error scraping profile {profile_link}: {str(e)}")
+
+    # Save data to CSV (add error handling)
+    try:
+        save_to_csv(posts_data)
+    except Exception as e:
+        print(f"Error saving data to CSV: {e}")
+
+    # Close the page after scraping
     await page.close()
+    
+
+def save_to_csv(posts_data):
+    # Define the fieldnames for the CSV file
+    fieldnames = ['caption', 'datetime', 'image_url']
+
+    # Open the CSV file in append mode (or create a new one if it doesn't exist)
+    with open('scraped_posts.csv', mode='a', newline='', encoding='utf-8') as file:
+        writer = csv.DictWriter(file, fieldnames=fieldnames)
+
+        # Write the header if the file is empty
+        if file.tell() == 0:
+            writer.writeheader()
+
+        # Write the post data
+        for post in posts_data:
+            # Handle missing values by replacing None with an empty string
+            post = {key: (value if value is not None else '') for key, value in post.items()}
+            writer.writerow(post)
+
+    print(f"Saved {len(posts_data)} posts to CSV.")
+
+
 
 # Concurrency management function
 async def scrape_profiles_concurrently(profile_links: list, context: BrowserContext, max_concurrent_tasks: int = 4):
@@ -87,30 +161,6 @@ async def main():
     # List of profile links to scrape
     profile_links = [
         "https://www.instagram.com/cristiano/",  # Cristiano Ronaldo
-        "https://www.instagram.com/leomessi/",   # Lionel Messi
-        "https://www.instagram.com/neymarjr/",   # Neymar Jr.
-        "https://www.instagram.com/kyliejenner/",  # Kylie Jenner
-        "https://www.instagram.com/therock/",   # Dwayne 'The Rock' Johnson
-        "https://www.instagram.com/kimkardashian/",  # Kim Kardashian
-        "https://www.instagram.com/arianagrande/",  # Ariana Grande
-        "https://www.instagram.com/selenagomez/",  # Selena Gomez
-        "https://www.instagram.com/beyonce/",  # Beyoncé
-        "https://www.instagram.com/justinbieber/",  # Justin Bieber
-        "https://www.instagram.com/taylorswift/",  # Taylor Swift
-        "https://www.instagram.com/nike/",  # Nike
-        "https://www.instagram.com/nationalgeographic/",  # National Geographic
-        "https://www.instagram.com/khaby00/",  # Khaby Lame
-        "https://www.instagram.com/virat.kohli/",  # Virat Kohli
-        "https://www.instagram.com/jlo/",  # Jennifer Lopez
-        "https://www.instagram.com/iamcardib/",  # Cardi B
-        "https://www.instagram.com/kevinhart4real/",  # Kevin Hart
-        "https://www.instagram.com/kingjames/",  # LeBron James
-        "https://www.instagram.com/dualipa/",  # Dua Lipa
-        "https://www.instagram.com/eminem/",  # Eminem
-        "https://www.instagram.com/badgalriri/",  # Rihanna
-        "https://www.instagram.com/rogerfederer/",  # Roger Federer
-        "https://www.instagram.com/chrishemsworth/",  # Chris Hemsworth
-        "https://www.instagram.com/shakira/",  # Shakira
     ]
 
     async with async_playwright() as p:
@@ -130,9 +180,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-
-
-# post text >> /html/body/div[7]/div[1]/div/div[3]/div/div/div/div/div[2]/div/article/div/div[2]/div/div/div[2]/div[1]/ul/div[1]/li/div/div/div[2]/div[1]
-# post video or image >> /html/body/div[7]/div[1]/div/div[3]/div/div/div/div/div[2]/div/article/div/div[1]
-
-# /html/body/div[7]/div[1]/div/div[3]/div/div/div/div/div[2]/div/article/div/div[1]/div/div[1]/div[2]/div/div/div/ul/li[2]/div/div/div/div/div[1]/img
