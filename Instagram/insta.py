@@ -51,55 +51,62 @@ async def scrape_profile(context: BrowserContext, profile_link: str):
     """Visit and scrape a profile using the provided link."""
     page = await context.new_page()
 
-    # Navigate to the profile link
-    await page.goto(profile_link)
-    print(f"Opened profile: {profile_link}")
-
-    # Wait for the profile page to load
-    await page.wait_for_selector("header")
-    print(f"Profile page loaded: {profile_link}")
-
-    await asyncio.sleep(1)
-
-    # Open the first post (to start scraping)
-    first_post = await page.query_selector('a[href*="/p/"]')
-    if first_post:
-        await first_post.click()
-        print("Clicked on the first post to open it.")
-        
-        await page.wait_for_selector('div._a9zs', timeout=15000)  # Wait for the caption to load
-    else:
-        print("No posts found on the profile.")
-        return  # Exit if no posts are available
-
-    posts_data = []
     try:
+        # Navigate to the profile link
+        await page.goto(profile_link)
+        print(f"Opened profile: {profile_link}")
+
+        # Wait for the profile page to load
+        await page.wait_for_selector("header", timeout=10000)
+        print(f"Profile page loaded: {profile_link}")
+
+        await asyncio.sleep(1)
+
+        # Open the first post (to start scraping)
+        first_post = await page.query_selector('a[href*="/p/"]')
+        if first_post:
+            await first_post.click()
+            print("Clicked on the first post to open it.")
+            await page.wait_for_selector('div._a9zs', timeout=15000)  # Wait for the post content container
+        else:
+            print("No posts found on the profile.")
+            return  # Exit if no posts are available
+
+        posts_data = []
         while True:
-            # Wait for elements to load properly (post caption, datetime, and image)
+            await asyncio.sleep(1)  # Allow dynamic elements to load
+
+            # Extracting post data
             post_caption = await page.query_selector('div._a9zs h1')  # Post caption
             post_datetime = await page.query_selector('time._a9ze')  # Post date/time
-            post_image = await page.query_selector('article img')  # Image in the post
 
-            # Extract data from elements
+            # Extract media content using evaluate_all
+            media_images = await page.locator('div._aatk img').evaluate_all(
+                "elements => elements.map(el => el.src)"
+            )
+
+            # Filter out any invalid URLs (e.g., "blob:")
+            image_urls = [url for url in media_images if "blob:" not in url]
+
+            # Get the caption and datetime
             caption = await post_caption.inner_text() if post_caption else None
             datetime = await post_datetime.get_attribute('datetime') if post_datetime else None
-            image_url = await post_image.get_attribute('src') if post_image else None
 
+            # Store post data without video_urls
             post_data = {
                 'caption': caption,
                 'datetime': datetime,
-                'image_url': image_url
+                'image_urls': image_urls
             }
             posts_data.append(post_data)
             print(f"Scraped post: {post_data}")
 
-            # Try clicking the next post if available (right arrow)
+            # Navigate to the next post
             next_button = await page.query_selector('svg[aria-label="Next"]')  # Right arrow
-
             if next_button:
                 await next_button.click()
                 print("Moved to the next post.")
-                await page.wait_for_selector('div._a9zs')  # Wait for next post to load
+                await page.wait_for_selector('div._a9zs', timeout=15000)  # Wait for the next post to load
             else:
                 print("No more posts found.")
                 break  # Exit loop if no next post is available
@@ -107,19 +114,20 @@ async def scrape_profile(context: BrowserContext, profile_link: str):
     except Exception as e:
         print(f"Error scraping profile {profile_link}: {str(e)}")
 
-    # Save data to CSV (add error handling)
-    try:
-        save_to_csv(posts_data)
-    except Exception as e:
-        print(f"Error saving data to CSV: {e}")
+    finally:
+        # Save data to CSV
+        try:
+            save_to_csv(posts_data)
+        except Exception as e:
+            print(f"Error saving data to CSV: {e}")
 
-    # Close the page after scraping
-    await page.close()
-    
+        # Close the page after scraping
+        await page.close()
+
 
 def save_to_csv(posts_data):
     # Define the fieldnames for the CSV file
-    fieldnames = ['caption', 'datetime', 'image_url']
+    fieldnames = ['caption', 'datetime', 'image_urls']
 
     # Open the CSV file in append mode (or create a new one if it doesn't exist)
     with open('scraped_posts.csv', mode='a', newline='', encoding='utf-8') as file:
@@ -136,6 +144,8 @@ def save_to_csv(posts_data):
             writer.writerow(post)
 
     print(f"Saved {len(posts_data)} posts to CSV.")
+
+
 
 
 
