@@ -47,10 +47,10 @@ async def scrape_profile(context: BrowserContext, profile_link: str, post_limit:
     db = client['instagram_scraper']  # Database name
     collection = db[username]  # Collection name (based on username)
 
-    # Retrieve existing post IDs directly from MongoDB
-    existing_post_ids = set(doc['post_id'] for doc in collection.find({}, {'post_id': 1}))
-    print(f"Loaded {len(existing_post_ids)} existing post IDs for {username} from MongoDB.")
-
+    # Retrieve the latest post from MongoDB
+    latest_post = collection.find_one(sort=[('datetime', -1)])  # Sort by datetime
+    latest_post_id = latest_post['post_id'] if latest_post else None
+    print(f"Latest scraped post ID for {username}: {latest_post_id}")
 
     posts_data = []
     scraped_post_count = 0
@@ -82,8 +82,9 @@ async def scrape_profile(context: BrowserContext, profile_link: str, post_limit:
             else:
                 post_id = None
 
-            if post_id in existing_post_ids:
-                print(f"Post ID {post_id} already exists. Stopping further scraping.")
+            # Check if this post matches the latest one in MongoDB
+            if post_id == latest_post_id:
+                print(f"Post ID {post_id} matches the latest scraped post. Stopping further scraping.")
                 break
 
             post_caption = await page.query_selector('div._a9zs h1')
@@ -133,6 +134,8 @@ async def scrape_profile(context: BrowserContext, profile_link: str, post_limit:
         print(f"Error scraping profile {profile_link}: {str(e)}")
     finally:
         await page.close()
+
+
 
 
 
