@@ -1,8 +1,14 @@
 import asyncio
 import os
-import csv
 from urllib.parse import urlparse
 from playwright.async_api import async_playwright, BrowserContext
+from pymongo import MongoClient
+
+def get_mongo_client():
+    # Create a connection to MongoDB (local or cloud-based)
+    client = MongoClient("mongodb://localhost:27017/")  # Update if you're using a cloud-based DB
+    return client
+
 
 SAVE_DIR = "temp"
 os.makedirs(SAVE_DIR, exist_ok=True)
@@ -48,9 +54,16 @@ def load_existing_post_ids(file_name):
 async def scrape_profile(context: BrowserContext, profile_link: str, post_limit: int = 10):
     page = await context.new_page()
     username = urlparse(profile_link).path.strip('/')
-    file_name = os.path.join(SAVE_DIR, f"{username}.csv")
-    existing_post_ids = load_existing_post_ids(file_name)
-    print(f"Loaded {len(existing_post_ids)} existing post IDs for {username}.")
+    
+    # Connect to MongoDB
+    client = get_mongo_client()
+    db = client['instagram_scraper']  # Database name
+    collection = db[username]  # Collection name (based on username)
+
+    # Retrieve existing post IDs directly from MongoDB
+    existing_post_ids = set(doc['post_id'] for doc in collection.find({}, {'post_id': 1}))
+    print(f"Loaded {len(existing_post_ids)} existing post IDs for {username} from MongoDB.")
+
 
     posts_data = []
     scraped_post_count = 0
@@ -59,7 +72,6 @@ async def scrape_profile(context: BrowserContext, profile_link: str, post_limit:
         await page.goto(profile_link)
         await page.wait_for_selector("header", timeout=100000)
 
-        # Try to find the first post URL (either /p/ or /reel/)
         try:
             await page.wait_for_selector('a[href*="/p/"], a[href*="/reel/"]', timeout=100000)
             first_post = await page.query_selector('a[href*="/p/"], a[href*="/reel/"]')
@@ -76,7 +88,6 @@ async def scrape_profile(context: BrowserContext, profile_link: str, post_limit:
         while scraped_post_count < post_limit:
             await asyncio.sleep(1)
             post_url = page.url
-            # Check if the URL is a post or a reel
             if '/p/' in post_url:
                 post_id = post_url.split('/p/')[1].split('/')[0]
             elif '/reel/' in post_url:
@@ -105,12 +116,18 @@ async def scrape_profile(context: BrowserContext, profile_link: str, post_limit:
                 'datetime': datetime,
                 'image_urls': image_urls
             }
-            posts_data.append(post_data)
-            print(f"Scraped post: {post_data}")
 
+            # Save the post to MongoDB
+            collection.update_one(
+                {'post_id': post_id},  # Check for existing post by post_id
+                {'$set': post_data},    # Update the post if it exists or insert it if it doesn't
+                upsert=True             # Insert if the post doesn't exist
+            )
+            print(f"Saved post {post_id} to MongoDB")
+
+            posts_data.append(post_data)
             scraped_post_count += 1
 
-            # Retry mechanism: try clicking the next post for a few times in case it doesn't load
             retry_count = 0
             while retry_count < 3:
                 next_button = await page.query_selector('svg[aria-label="Next"]')
@@ -128,22 +145,8 @@ async def scrape_profile(context: BrowserContext, profile_link: str, post_limit:
     except Exception as e:
         print(f"Error scraping profile {profile_link}: {str(e)}")
     finally:
-        save_to_csv(posts_data, file_name)
         await page.close()
 
-
-
-def save_to_csv(posts_data, file_name):
-    fieldnames = ['post_id', 'caption', 'datetime', 'image_urls']
-    file_exists = os.path.exists(file_name)
-    with open(file_name, mode='a' if file_exists else 'w', newline='', encoding='utf-8') as file:
-        writer = csv.DictWriter(file, fieldnames=fieldnames)
-        if not file_exists:
-            writer.writeheader()
-        for post in posts_data:
-            post = {key: (value if value is not None else '') for key, value in post.items()}
-            writer.writerow(post)
-    print(f"Saved {len(posts_data)} posts to {file_name}.")
 
 
 async def scrape_profiles_concurrently(context: BrowserContext, profile_links: list, post_limit: int = 10, max_tasks: int = 4):
