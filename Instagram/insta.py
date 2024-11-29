@@ -41,19 +41,20 @@ async def login_to_instagram(username: str, password: str, browser) -> BrowserCo
 async def scrape_profile(context: BrowserContext, profile_link: str, post_limit: int = 10):
     page = await context.new_page()
     username = urlparse(profile_link).path.strip('/')
-    
+
     # Connect to MongoDB
     client = get_mongo_client()
     db = client['instagram_scraper']  # Database name
     collection = db[username]  # Collection name (based on username)
 
-    # Retrieve the latest post from MongoDB
-    latest_post = collection.find_one(sort=[('datetime', -1)])  # Sort by datetime
+    # Get the latest post_id from the database
+    latest_post = collection.find_one({}, sort=[('datetime', -1)])
     latest_post_id = latest_post['post_id'] if latest_post else None
-    print(f"Latest scraped post ID for {username}: {latest_post_id}")
+    print(f"Latest post ID in DB for {username}: {latest_post_id}")
 
     posts_data = []
     scraped_post_count = 0
+    skipped_pinned_count = 0  # Counter for skipped pinned posts
 
     try:
         await page.goto(profile_link)
@@ -67,7 +68,7 @@ async def scrape_profile(context: BrowserContext, profile_link: str, post_limit:
             first_post = None
 
         if not first_post:
-            print("No posts found on the profile.")
+            print(f"No posts found on the profile: {username}")
             return
         await first_post.click()
         await page.wait_for_selector('div._a9zs', timeout=150000)
@@ -82,9 +83,35 @@ async def scrape_profile(context: BrowserContext, profile_link: str, post_limit:
             else:
                 post_id = None
 
-            # Check if this post matches the latest one in MongoDB
+            # Locate the post container and check for pinned icon within the scope of that post
+            post_container = await page.query_selector(f'a[href*="/p/{post_id}/"], a[href*="/reel/{post_id}/"]')
+            if not post_container:
+                print(f"Post container not found for post ID {post_id}")
+                break
+
+            # Check if the pinned icon exists inside the post container (scope limited to this post)
+            pinned_icon = await post_container.query_selector('svg[aria-label="Pinned post icon"]')
+            if pinned_icon:
+                print(f"Skipping pinned post for {username}: {post_id}")
+                skipped_pinned_count += 1
+
+                # If too many posts are skipped, exit to avoid infinite loop
+                if skipped_pinned_count > 10:  # Adjust the threshold if necessary
+                    print(f"Too many pinned posts for {username}, exiting.")
+                    break
+
+                # Move to the next post
+                next_button = await page.query_selector('svg[aria-label="Next"]')
+                if next_button:
+                    await next_button.click()
+                    await page.wait_for_selector('div._a9zs', timeout=15000)
+                else:
+                    print(f"No 'Next' button found for {username} while skipping pinned posts.")
+                continue
+
+            # Stop scraping if the post ID already exists in the database
             if post_id == latest_post_id:
-                print(f"Post ID {post_id} matches the latest scraped post. Stopping further scraping.")
+                print(f"Post ID {post_id} matches the latest post in DB for {username}. Stopping further scraping.")
                 break
 
             post_caption = await page.query_selector('div._a9zs h1')
@@ -111,10 +138,11 @@ async def scrape_profile(context: BrowserContext, profile_link: str, post_limit:
                 {'$set': post_data},    # Update the post if it exists or insert it if it doesn't
                 upsert=True             # Insert if the post doesn't exist
             )
-            print(f"Saved post {post_id} to MongoDB")
+            print(f"Saved post {post_id} to MongoDB for {username}")
 
             posts_data.append(post_data)
             scraped_post_count += 1
+            skipped_pinned_count = 0  # Reset pinned counter when a valid post is scraped
 
             retry_count = 0
             while retry_count < 3:
@@ -124,18 +152,16 @@ async def scrape_profile(context: BrowserContext, profile_link: str, post_limit:
                     await page.wait_for_selector('div._a9zs', timeout=15000)
                     break
                 retry_count += 1
-                print(f"Retry {retry_count} failed to find the next post.")
+                print(f"Retry {retry_count} failed to find the next post for {username}.")
             
             if retry_count == 3 or scraped_post_count >= post_limit:
-                print("No more posts or post limit reached.")
+                print(f"No more posts or post limit reached for {username}.")
                 break
 
     except Exception as e:
         print(f"Error scraping profile {profile_link}: {str(e)}")
     finally:
         await page.close()
-
-
 
 
 
