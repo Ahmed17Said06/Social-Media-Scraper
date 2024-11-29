@@ -46,9 +46,8 @@ def load_existing_post_ids(file_name):
 
 
 async def scrape_profile(context: BrowserContext, profile_link: str, post_limit: int = 10):
-    """Scrape a profile and avoid redundant posts."""
     page = await context.new_page()
-    username = urlparse(profile_link).path.strip('/')  # Extract username
+    username = urlparse(profile_link).path.strip('/')
     file_name = os.path.join(SAVE_DIR, f"{username}.csv")
     existing_post_ids = load_existing_post_ids(file_name)
     print(f"Loaded {len(existing_post_ids)} existing post IDs for {username}.")
@@ -60,9 +59,10 @@ async def scrape_profile(context: BrowserContext, profile_link: str, post_limit:
         await page.goto(profile_link)
         await page.wait_for_selector("header", timeout=100000)
 
+        # Try to find the first post URL (either /p/ or /reel/)
         try:
-            await page.wait_for_selector('a[href*="/p/"]', timeout=100000)
-            first_post = await page.query_selector('a[href*="/p/"]')
+            await page.wait_for_selector('a[href*="/p/"], a[href*="/reel/"]', timeout=100000)
+            first_post = await page.query_selector('a[href*="/p/"], a[href*="/reel/"]')
         except Exception as e:
             print("Timeout: First post not found.", str(e))
             first_post = None
@@ -76,7 +76,13 @@ async def scrape_profile(context: BrowserContext, profile_link: str, post_limit:
         while scraped_post_count < post_limit:
             await asyncio.sleep(1)
             post_url = page.url
-            post_id = post_url.split('/p/')[1].split('/')[0] if '/p/' in post_url else None
+            # Check if the URL is a post or a reel
+            if '/p/' in post_url:
+                post_id = post_url.split('/p/')[1].split('/')[0]
+            elif '/reel/' in post_url:
+                post_id = post_url.split('/reel/')[1].split('/')[0]
+            else:
+                post_id = None
 
             if post_id in existing_post_ids:
                 print(f"Post ID {post_id} already exists. Stopping further scraping.")
@@ -104,11 +110,18 @@ async def scrape_profile(context: BrowserContext, profile_link: str, post_limit:
 
             scraped_post_count += 1
 
-            next_button = await page.query_selector('svg[aria-label="Next"]')
-            if next_button and scraped_post_count < post_limit:
-                await next_button.click()
-                await page.wait_for_selector('div._a9zs', timeout=15000)
-            else:
+            # Retry mechanism: try clicking the next post for a few times in case it doesn't load
+            retry_count = 0
+            while retry_count < 3:
+                next_button = await page.query_selector('svg[aria-label="Next"]')
+                if next_button:
+                    await next_button.click()
+                    await page.wait_for_selector('div._a9zs', timeout=15000)
+                    break
+                retry_count += 1
+                print(f"Retry {retry_count} failed to find the next post.")
+            
+            if retry_count == 3 or scraped_post_count >= post_limit:
                 print("No more posts or post limit reached.")
                 break
 
@@ -117,6 +130,7 @@ async def scrape_profile(context: BrowserContext, profile_link: str, post_limit:
     finally:
         save_to_csv(posts_data, file_name)
         await page.close()
+
 
 
 def save_to_csv(posts_data, file_name):
