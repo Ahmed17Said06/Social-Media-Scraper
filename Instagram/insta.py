@@ -38,19 +38,6 @@ async def login_to_instagram(username: str, password: str, browser) -> BrowserCo
     return context
 
 
-def load_existing_post_ids(file_name):
-    """Load existing post_ids from a CSV file if it exists."""
-    if not os.path.exists(file_name):
-        return set()
-    post_ids = set()
-    with open(file_name, mode='r', encoding='utf-8') as file:
-        reader = csv.DictReader(file)
-        for row in reader:
-            if "post_id" in row and row["post_id"]:
-                post_ids.add(row["post_id"])
-    return post_ids
-
-
 async def scrape_profile(context: BrowserContext, profile_link: str, post_limit: int = 10):
     page = await context.new_page()
     username = urlparse(profile_link).path.strip('/')
