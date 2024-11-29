@@ -10,8 +10,6 @@ def get_mongo_client():
     return client
 
 
-SAVE_DIR = "temp"
-os.makedirs(SAVE_DIR, exist_ok=True)
 
 STORAGE_FILE = "instagram_session.json"
 
