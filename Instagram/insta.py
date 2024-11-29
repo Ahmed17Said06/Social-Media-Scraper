@@ -1,6 +1,6 @@
 import asyncio
 import os
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs
 from playwright.async_api import async_playwright, BrowserContext, Page, Playwright
 import csv
 
@@ -24,7 +24,7 @@ async def login_to_instagram(username: str, password: str, browser) -> BrowserCo
         await page.goto("https://www.instagram.com/")
         print("Opened Instagram")
 
-        await page.wait_for_selector("input[name='username']", timeout=10000)
+        await page.wait_for_selector("input[name='username']", timeout=100000)
 
         await page.fill("input[name='username']", username)
         await page.fill("input[name='password']", password)
@@ -55,7 +55,7 @@ async def scrape_profile(context: BrowserContext, profile_link: str, post_limit:
         await page.goto(profile_link)
         print(f"Opened profile: {profile_link}")
 
-        await page.wait_for_selector("header", timeout=100000)
+        await page.wait_for_selector("header", timeout=10000)
         print(f"Profile page loaded: {profile_link}")
 
         await asyncio.sleep(1)
@@ -73,6 +73,10 @@ async def scrape_profile(context: BrowserContext, profile_link: str, post_limit:
         while post_count < post_limit:
             await asyncio.sleep(1)
 
+            # Extract the post URL to determine the post_id
+            post_url = page.url
+            post_id = post_url.split('/p/')[1].split('/')[0] if '/p/' in post_url else None
+
             post_caption = await page.query_selector('div._a9zs h1')
             post_datetime = await page.query_selector('time._a9ze')
 
@@ -85,6 +89,7 @@ async def scrape_profile(context: BrowserContext, profile_link: str, post_limit:
             datetime = await post_datetime.get_attribute('datetime') if post_datetime else None
 
             post_data = {
+                'post_id': post_id,
                 'caption': caption,
                 'datetime': datetime,
                 'image_urls': image_urls
@@ -113,7 +118,7 @@ async def scrape_profile(context: BrowserContext, profile_link: str, post_limit:
         await page.close()
 
 def save_to_csv(posts_data, file_name):
-    fieldnames = ['caption', 'datetime', 'image_urls']
+    fieldnames = ['post_id', 'caption', 'datetime', 'image_urls']
 
     with open(file_name, mode='w', newline='', encoding='utf-8') as file:
         writer = csv.DictWriter(file, fieldnames=fieldnames)
@@ -167,7 +172,7 @@ async def main():
                     "https://www.instagram.com/chrishemsworth/", # Chris Hemsworth 
                     "https://www.instagram.com/shakira/", # Shakira 
                 ]
-
+                
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=False)
 
