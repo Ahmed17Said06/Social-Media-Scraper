@@ -4,6 +4,7 @@ from urllib.parse import urlparse
 from playwright.async_api import async_playwright, BrowserContext
 from pymongo import MongoClient
 
+
 def get_mongo_client():
     # Create a connection to MongoDB (local or cloud-based)
     client = MongoClient("mongodb://localhost:27017/")  # Update if you're using a cloud-based DB
@@ -21,18 +22,37 @@ async def login_to_instagram(username: str, password: str, browser) -> BrowserCo
     else:
         context = await browser.new_context()
         page = await context.new_page()
+        
+        # Go to Instagram login page
         await page.goto("https://www.instagram.com/")
         await page.wait_for_selector("input[name='username']", timeout=10000)
         await page.fill("input[name='username']", username)
         await page.fill("input[name='password']", password)
         await page.click("button[type='submit']")
+
         try:
+            # Wait for the page to load after login, or check for the "Save info" button
+            await asyncio.sleep(10)
+            await page.wait_for_selector("button._acan._acap._acas._aj1-._ap30", timeout=1500000)
+            save_info_button = await page.query_selector("button._acan._acap._acas._aj1-._ap30")
+            
+            if save_info_button:
+                print("Clicking on 'Save info' button...")
+                await save_info_button.click()
+                # Add a delay to ensure the session is saved before moving on
+                await page.wait_for_timeout(2000)  # 2-second delay, adjust as necessary
+
+            # Now check if the login was successful (check for a nav bar or some page element)
             await page.wait_for_selector("nav", timeout=15000)
             print("Login successful")
+
+            # Save session state after successful login and button click
             await context.storage_state(path=STORAGE_FILE)
+        
         except Exception as e:
             print("Login failed:", e)
             return None
+    
     return context
 
 
@@ -205,7 +225,7 @@ async def main():
                 ]
 
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=False)
+        browser = await p.chromium.launch(headless=True)
         context = await login_to_instagram(username, password, browser)
         if context:
             await scrape_profiles_concurrently(context, profile_links)
