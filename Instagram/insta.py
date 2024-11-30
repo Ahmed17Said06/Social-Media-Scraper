@@ -1,14 +1,39 @@
 import asyncio
 import os
+import aiohttp
+import gridfs
 from urllib.parse import urlparse
 from playwright.async_api import async_playwright, BrowserContext
 from pymongo import MongoClient
 
 
-def get_mongo_client():
-    # Create a connection to MongoDB (local or cloud-based)
-    client = MongoClient("mongodb://localhost:27017/")  # Update if you're using a cloud-based DB
-    return client
+client = MongoClient('mongodb://mongo:27017')
+db = client['instagram_scraper']  # or whatever your DB name is
+fs = gridfs.GridFS(db)
+
+async def download_image_to_mongodb(image_url, post_id, username):
+    try:
+        # Fetch the image using aiohttp
+        async with aiohttp.ClientSession() as session:
+            async with session.get(image_url) as response:
+                if response.status == 200:
+                    # Read the image content as bytes
+                    img_data = await response.read()
+
+                    # Save the image to GridFS with additional metadata
+                    img_name = f"{username}_{post_id}_{image_url.split('/')[-1]}"
+                    file_id = fs.put(
+                        img_data,
+                        filename=img_name,
+                        post_id=post_id,            # Save the post ID
+                        target=username,            # Save the username as target
+                        platform="Instagram"        # Hardcode platform to "Instagram"
+                    )
+                    print(f"Image saved to MongoDB with file_id: {file_id}")
+                else:
+                    print(f"Failed to download {image_url} (Status: {response.status})")
+    except Exception as e:
+        print(f"Error downloading image {image_url}: {str(e)}")
 
 
 
@@ -60,9 +85,6 @@ async def scrape_profile(context: BrowserContext, profile_link: str, post_limit:
     page = await context.new_page()
     username = urlparse(profile_link).path.strip('/')
 
-    # Connect to MongoDB
-    client = get_mongo_client()
-    db = client['instagram_scraper']  # Database name
     collection = db[username]  # Collection name (based on username)
 
     # Get the latest post_id from the database
@@ -162,6 +184,12 @@ async def scrape_profile(context: BrowserContext, profile_link: str, post_limit:
             scraped_post_count += 1
             skipped_pinned_count = 0  # Reset pinned counter when a valid post is scraped
 
+
+            # Download images to MongoDB (if any)
+            if image_urls:
+                for img_url in image_urls:
+                    await download_image_to_mongodb(img_url, post_id, username)
+
             retry_count = 0
             while retry_count < 3:
                 next_button = await page.query_selector('svg[aria-label="Next"]')
@@ -195,8 +223,8 @@ async def scrape_profiles_concurrently(context: BrowserContext, profile_links: l
 
 
 async def main():
-    username = "socialmedi51534"
-    password = "thisis_B0T"
+    username = "insta.25.scra"
+    password = "hello@WORLD@2025"
     profile_links = [ 
                     "https://www.instagram.com/cristiano/", # Cristiano Ronaldo 
                     "https://www.instagram.com/leomessi/", # Lionel Messi 

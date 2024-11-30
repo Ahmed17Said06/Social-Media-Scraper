@@ -1,0 +1,5 @@
+# Run Instagram scraper every 3 hours
+0 1-23/2 * * * /usr/local/bin/python -u /root/insta.py >> /var/log/cron.log 2>&1
+
+
+

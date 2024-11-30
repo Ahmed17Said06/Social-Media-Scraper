@@ -16,11 +16,11 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
 from bs4 import BeautifulSoup
-import pandas as pd
-import time
 from selenium.common.exceptions import NoSuchElementException
 from selenium.common.exceptions import TimeoutException
 from selenium.common.exceptions import StaleElementReferenceException
+import pandas as pd
+import time
 import os
 import random
 import json
@@ -408,22 +408,27 @@ def scrape_tweets(wd, df, num_tweets = 1, latest_status_id = None, max_retries=3
     return df
         
 
+
 def download_images(image_urls, target_account, post_status_id, fs):
     for img_url in tqdm(image_urls, desc=f'Downloading images for {target_account}'):
         try:
+            # Fetch the image content from the URL
             img_data = requests.get(img_url).content
-            # Store image in GridFS with additional metadata
-            img_name = os.path.basename(img_url)
+            img_name = os.path.basename(img_url)  # Extract image filename from URL
+
+            # Save the image to GridFS with additional metadata
             fs.put(
                 img_data,
                 filename=img_name,
-                content_type='image/jpeg',  # Change content_type if needed
-                post_status_id=post_status_id,
-                target=target_account  # Save the target account as metadata
+                post_id=post_status_id,  # Store the post ID (e.g., X.com post ID or Instagram post ID)
+                target=target_account,  # Store the target account name (e.g., Instagram profile name)
+                platform="X.com",  # You can change this dynamically based on the platform (Instagram or X.com)
             )
             print(f"Uploaded to GridFS: {img_name}")
+
         except Exception as e:
             print(f"Failed to download {img_url}: {e}")
+
 
 
 

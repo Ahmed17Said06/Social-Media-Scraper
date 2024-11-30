@@ -1,9 +1,9 @@
 version: '3.8'
 
 services:
-  scraper:
+  x_scraper:
     user: root
-    build: .
+    build: ./X
     volumes:
       - ./archive:/root/archive
     environment:
@@ -11,6 +11,18 @@ services:
     command: ["sh", "-c", "cron && Xvfb :99 -ac & tail -f /var/log/cron.log"]
     depends_on:
       - mongo
+
+
+  # Service for Instagram scraper
+  insta_scraper:
+    user: root
+    build: ./Instagram  # Adjust the path as needed for the Instagram scraper
+    environment:
+      - DISPLAY=:99
+    command: ["sh", "-c", "cron && Xvfb :99 -ac & tail -f /var/log/cron.log"]
+    depends_on:
+      - mongo
+
 
   mongo:
     image: mongo:latest

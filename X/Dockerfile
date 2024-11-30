@@ -28,8 +28,8 @@ RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add
 WORKDIR /root
 
 # Copy requirements and install Python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirments.txt .
+RUN pip install --no-cache-dir -r requirments.txt
 
 # Copy the application code
 COPY . .

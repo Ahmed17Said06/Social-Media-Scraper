@@ -1,6 +1,6 @@
 # Run every 60 mins 
 
-0 * * * * /usr/local/bin/python -u x.py >> /var/log/cron.log 2>&1
+0 */2 * * * /usr/local/bin/python -u x.py >> /var/log/cron.log 2>&1
 
 
 
