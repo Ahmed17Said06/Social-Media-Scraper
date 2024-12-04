@@ -8,6 +8,7 @@ from pymongo import MongoClient
 
 
 client = MongoClient('mongodb://mongo:27017')
+#client = MongoClient('mongodb://localhost:27017')
 db = client['instagram_scraper']  # or whatever your DB name is
 fs = gridfs.GridFS(db)
 
