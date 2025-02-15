@@ -158,7 +158,7 @@ async def scrape_profile(context: BrowserContext, profile_link: str, post_limit:
 
     try:
         await page.goto(profile_link)
-        await page.wait_for_selector('article', timeout=10000)
+        await page.wait_for_selector('article', timeout=60000)
 
         df = await scrape_tweets(page, df, num_tweets=post_limit, latest_status_id=latest_post_id)
 
@@ -221,17 +221,25 @@ async def login_to_x(username: str, password: str, browser) -> BrowserContext:
     await page.click('//html/body/div/div/div/div[1]/div/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div/div/div/button[2]/div')  # Click the "Next" button after entering the username
     
     # Check if email input field appears
+    # /html/body/div/div/div/div[1]/div/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[1]/div/div[2]/label/div/div[2]/div/input
     try:
-        await page.wait_for_selector('//html/body/div/div/div/div[1]/div/div/div/div/div/div/div[2]/div[2]/div[1]/div/div[2]/label/div/div[2]', timeout=5000)
-        await page.fill('//html/body/div/div/div/div[1]/div/div/div/div/div/div/div[2]/div[2]/div[1]/div/div[2]/label/div/div[2]', 'socialmediascrape@gmail.com')
+        await page.wait_for_selector('//html/body/div/div/div/div[1]/div/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[1]/div/div[2]/label/div/div[2]/div/input', timeout=60000)
+        await page.fill('//html/body/div/div/div/div[1]/div/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[1]/div/div[2]/label/div/div[2]/div/input', 'socialmediascrape@gmail.com')
         await page.click('//html/body/div/div/div/div[1]/div/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[2]/div/div/div/button/div')  # Click the "Next" button after entering the email
     except Exception:
         pass  # Email input field did not appear, proceed to password
 
-    await page.fill('//html/body/div/div/div/div[1]/div/div/div/div/div/div/div[2]/div[2]/div[1]/div/div/div[3]/div/label/div/div[2]', password)
-    await page.click('//html/body/div/div/div/div[1]/div/div/div/div/div/div/div[2]/div[2]/div[2]/div/div[1]/div/div/button/div')  # Click the login button after entering the password
+    # Increase timeout and add logging for password field
+    try:
+        await page.wait_for_selector('//html/body/div/div/div/div[1]/div/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[1]/div/div/div[3]/div/label/div/div[2]/div[1]/input', timeout=60000)
+        await page.fill('//html/body/div/div/div/div[1]/div/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[1]/div/div/div[3]/div/label/div/div[2]/div[1]/input', password)
+    except Exception as e:
+        print(f"Error locating or filling password field: {e}")
+        return None
+
+    await page.click('//html/body/div/div/div/div[1]/div/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[2]/div/div[1]/div/div/button/div')  # Click the login button after entering the password
     
-    await page.wait_for_selector('nav[aria-label="Primary"]', timeout=10000)
+    await page.wait_for_selector('nav[aria-label="Primary"]', timeout=600000)
     print("Login successful")
     
     # Save cookies
@@ -247,11 +255,6 @@ async def main():
     profile_links = [
         "https://x.com/elonmusk",
         "https://x.com/billgates",
-        "https://x.com/Cristiano",
-        "https://x.com/KMbappe",
-        "https://x.com/ErlingHaaland",
-        "https://x.com/realDonaldTrump",
-        "https://x.com/BarackObama"
         # Add more profiles as needed
     ]
 
