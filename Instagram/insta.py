@@ -7,8 +7,8 @@ from playwright.async_api import async_playwright, BrowserContext
 from pymongo import MongoClient
 
 
-client = MongoClient('mongodb://mongo:27017')
-#client = MongoClient('mongodb://localhost:27017')
+#client = MongoClient('mongodb://mongo:27017')
+client = MongoClient('mongodb://localhost:27017')
 db = client['instagram_scraper']  # or whatever your DB name is
 fs = gridfs.GridFS(db)
 
@@ -112,7 +112,7 @@ async def scrape_profile(context: BrowserContext, profile_link: str, post_limit:
             print(f"No posts found on the profile: {username}")
             return
         await first_post.click()
-        await page.wait_for_selector('div._a9zs', timeout=150000)
+        await page.wait_for_selector('div._aear', timeout=15000)
 
         while scraped_post_count < post_limit:
             await asyncio.sleep(1)
@@ -145,7 +145,7 @@ async def scrape_profile(context: BrowserContext, profile_link: str, post_limit:
                 next_button = await page.query_selector('svg[aria-label="Next"]')
                 if next_button:
                     await next_button.click()
-                    await page.wait_for_selector('div._a9zs', timeout=15000)
+                    await page.wait_for_selector('div._aear', timeout=15000)
                 else:
                     print(f"No 'Next' button found for {username} while skipping pinned posts.")
                 continue
@@ -155,7 +155,7 @@ async def scrape_profile(context: BrowserContext, profile_link: str, post_limit:
                 print(f"Post ID {post_id} matches the latest post in DB for {username}. Stopping further scraping.")
                 break
 
-            post_caption = await page.query_selector('div._a9zs h1')
+            post_caption = await page.query_selector('div._aear h1')
             post_datetime = await page.query_selector('time._a9ze')
 
             media_images = await page.locator('div._aatk img').evaluate_all(
@@ -196,7 +196,7 @@ async def scrape_profile(context: BrowserContext, profile_link: str, post_limit:
                 next_button = await page.query_selector('svg[aria-label="Next"]')
                 if next_button:
                     await next_button.click()
-                    await page.wait_for_selector('div._a9zs', timeout=15000)
+                    await page.wait_for_selector('div._aear', timeout=15000)
                     break
                 retry_count += 1
                 print(f"Retry {retry_count} failed to find the next post for {username}.")
@@ -254,7 +254,7 @@ async def main():
                 ]
 
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
+        browser = await p.chromium.launch(headless=False)
         context = await login_to_instagram(username, password, browser)
         if context:
             await scrape_profiles_concurrently(context, profile_links)
