@@ -1,10 +1,13 @@
 import asyncio
 import os
 import aiohttp
+import aiofiles
 import gridfs
 from urllib.parse import urlparse
 from playwright.async_api import async_playwright, BrowserContext
 from pymongo import MongoClient
+import datetime
+import random  # Add this import at the top of your file if not already present
 
 
 #client = MongoClient('mongodb://mongo:27017')
@@ -208,8 +211,305 @@ async def scrape_profile(context: BrowserContext, profile_link: str, post_limit:
     except Exception as e:
         print(f"Error scraping profile {profile_link}: {str(e)}")
     finally:
+        try:
+            # Try to click any close button if present
+            close_button = await page.query_selector('svg[aria-label="Close"]')
+            if close_button:
+                await close_button.click()
+                await page.wait_for_timeout(1000)
+        except:
+            pass
+        
+        # Always close the page
         await page.close()
 
+
+async def download_story_media(url, username, story_id):
+    """Download media file from URL and save to local file system"""
+    if not url:
+        return None
+        
+    # Create directory for downloads if it doesn't exist
+    os.makedirs(f"story_media/{username}", exist_ok=True)
+    
+    # Handle srcset format (pick highest quality)
+    if "," in url:
+        parts = url.split(",")
+        url = parts[0].strip().split(" ")[0]
+    
+    # Determine file extension from URL or default to jpg
+    file_ext = "jpg"
+    if ".mp4" in url or "/mp4" in url:
+        file_ext = "mp4"
+    elif ".webp" in url:
+        file_ext = "webp"
+        
+    file_path = f"story_media/{username}/{story_id}.{file_ext}"
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                if response.status == 200:
+                    async with aiofiles.open(file_path, 'wb') as f:
+                        await f.write(await response.read())
+                    print(f"Downloaded media to {file_path}")
+                    return file_path
+                else:
+                    print(f"Failed to download media: HTTP {response.status}")
+                    return None
+    except Exception as e:
+        print(f"Error downloading media: {str(e)}")
+        return None
+
+async def scrape_stories(context: BrowserContext, username: str):
+    # Create a fresh page for each target
+    page = await context.new_page()
+    collection = db[f"{username}_stories"]
+    
+    try:
+        # Go directly to the target URL
+        print(f"Navigating to stories for {username}")
+        target_url = f"https://www.instagram.com/stories/{username}/"
+        await page.goto(target_url, wait_until="networkidle")
+        
+        # Verify we're on the correct page
+        current_url = page.url
+        if username not in current_url:
+            print(f"Warning: URL doesn't contain target username. Expected '{username}', got URL: {current_url}")
+        
+        await page.wait_for_timeout(3000)
+        
+        # Handle the "View story" confirmation prompt
+        try:
+            view_story_button = await page.wait_for_selector(
+                'div[role="button"]:has-text("View story"), div[role="button"]:has-text("View Story")', 
+                timeout=5000
+            )
+            if view_story_button:
+                print(f"Found 'View story' prompt for {username}, clicking to continue...")
+                await view_story_button.click()
+                await page.wait_for_timeout(3000)
+        except Exception as e:
+            print(f"No 'View story' prompt found or error handling it: {str(e)}")
+        
+        # Take a debug screenshot
+        os.makedirs("debug_screenshots", exist_ok=True)
+        await page.screenshot(path=f"debug_screenshots/{username}_after_view_click.png", timeout=5000)
+        
+        # Check for story existence
+        story_exists = False
+        for selector in [
+            'div.x5yr21d.x1n2onr6.xh8yej3 img.xl1xv1r',
+            'div.x5yr21d.x1n2onr6.xh8yej3 > img',
+            'video[playsinline]'  # Add video selector
+        ]:
+            element = await page.query_selector(selector)
+            if element:
+                story_exists = True
+                print(f"Found story indicator: {selector}")
+                break
+        
+        if not story_exists:
+            print(f"No active stories for {username}")
+            return []
+            
+        print(f"Found stories for {username}, attempting to extract")
+        
+        stories_data = []
+        has_more_stories = True
+        story_count = 0
+        max_time = 120  # Maximum 2 minutes to avoid getting stuck
+        start_time = datetime.datetime.now()
+        consecutive_video_errors = 0  # Track consecutive video errors
+        
+        while has_more_stories and story_count < 30:
+            # Time-based safety exit
+            if (datetime.datetime.now() - start_time).total_seconds() > max_time:
+                print(f"Safety timeout reached (2 minutes). Stopping story extraction.")
+                break
+                
+            # URL-based safety check - make sure we're still on the target's stories
+            current_url = page.url
+            if f"instagram.com/stories/{username}" not in current_url:
+                print(f"Navigation detected to page outside target stories: {current_url}")
+                print("Stopping story extraction.")
+                break
+            
+            story_count += 1
+            print(f"Processing story {story_count} for {username}")
+            
+            # Get current story timestamp and ID
+            story_url = page.url
+            story_id = story_url.split('/')[-2] if '/stories/' in story_url else f"{username}_story_{story_count}"
+            
+            # Create basic story data
+            story_data = {
+                'story_id': story_id,
+                'username': username,
+                'scraped_at': datetime.datetime.now().isoformat()
+            }
+            
+            # Check for video playback error immediately
+            try:
+                video_error = await page.query_selector_all('text="Sorry, We\'re having trouble playing this video."')
+                if video_error and len(video_error) > 0:
+                    print("Detected video playback error - this is a video story with issues")
+                    story_data['media_type'] = 'video'
+                    story_data['playback_error'] = True
+                    consecutive_video_errors += 1
+                    
+                    # If we encounter too many consecutive video errors, break out
+                    if consecutive_video_errors >= 3:
+                        print("Too many consecutive video errors. Stopping extraction.")
+                        break
+                else:
+                    consecutive_video_errors = 0  # Reset if no error
+            except Exception as e:
+                print(f"Error checking for video playback issues: {e}")
+            
+            # Take screenshot of whatever is visible
+            os.makedirs("story_screenshots", exist_ok=True)
+            story_screenshot_path = f"story_screenshots/{username}_{story_count}.png"
+            await page.screenshot(path=story_screenshot_path, timeout=5000)
+            story_data['screenshot_path'] = story_screenshot_path
+            
+            # Try to detect if this is an image or video story
+            image_element = await page.query_selector('div.x5yr21d.x1n2onr6.xh8yej3 > img.xl1xv1r')
+            video_element = await page.query_selector('video[playsinline]')
+            
+            # Initialize media variables
+            media_url = None
+            media_type = None
+            
+            # Extract media URL based on type
+            if image_element:
+                media_url = await image_element.get_attribute('src')
+                alt_text = await image_element.get_attribute('alt')
+                media_type = 'image'
+                
+                if media_url and "instagram" in media_url:
+                    print(f"Found image story: {media_url[:50]}...")
+                    if alt_text:
+                        story_data['media_alt'] = alt_text
+            
+            elif video_element:
+                # Try to get video source
+                source_element = await video_element.query_selector('source')
+                if source_element:
+                    media_url = await source_element.get_attribute('src')
+                else:
+                    media_url = await video_element.get_attribute('src')
+                
+                media_type = 'video'
+                if media_url:
+                    print(f"Found video story: {media_url[:50]}...")
+            
+            # If we found a media URL, attempt to download it
+            if media_url and "instagram" in media_url:
+                story_data['media_url'] = media_url
+                story_data['media_type'] = media_type
+                
+                # Download the media
+                media_file_path = await download_story_media(media_url, username, story_id)
+                
+                if media_file_path:
+                    story_data['media_file_path'] = media_file_path
+                    print(f"Successfully downloaded {media_type} to {media_file_path}")
+            else:
+                print(f"Could not extract media URL from story {story_count}")
+            
+            # Save story data to MongoDB
+            collection.update_one({'story_id': story_id}, {'$set': story_data}, upsert=True)
+            stories_data.append(story_data)
+            
+            # Set a timeout for navigation to ensure we don't get stuck
+            navigation_timeout = 5000  # 5 seconds
+            
+            # Navigate to next story with timeout protection
+            try:
+                next_button = await page.query_selector('div.x6s0dn4.x78zum5.xdt5ytf.xl56j7k')
+                if next_button:
+                    print(f"Moving to next story for {username}")
+                    # Use a Promise with timeout for navigation
+                    with page.expect_navigation(timeout=navigation_timeout, wait_until="networkidle") as navigation:
+                        await next_button.click()
+                    
+                    # Check if navigation was successful
+                    if not navigation.value:
+                        print("Navigation timed out. Forcing exit from story view.")
+                        break
+                    
+                    # Check if we're still on target user's stories after clicking next
+                    new_url = page.url
+                    if username not in new_url:
+                        print(f"Next button navigated to a different user's stories: {new_url}")
+                        print("Stopping story extraction.")
+                        break
+                else:
+                    print(f"No more stories for {username} after {story_count}")
+                    has_more_stories = False
+            except Exception as e:
+                print(f"Error during navigation: {e}")
+                # Handle video playback errors specifically
+                if "trouble playing this video" in str(e):
+                    print("Detected video playback issue during navigation. Attempting to continue...")
+                    try:
+                        # Try clicking anywhere to dismiss the error
+                        await page.mouse.click(300, 300)
+                        await page.wait_for_timeout(1000)
+                        
+                        # Try next button again
+                        next_button = await page.query_selector('div.x6s0dn4.x78zum5.xdt5ytf.xl56j7k')
+                        if next_button:
+                            await next_button.click()
+                            await page.wait_for_timeout(2000)
+                        else:
+                            # If no next button, we're likely at the end
+                            has_more_stories = False
+                    except:
+                        # If recovery fails, exit gracefully
+                        print("Failed to recover from video playback error. Exiting.")
+                        break
+                else:
+                    # For non-video errors, just break the loop
+                    print("Navigation error, stopping story extraction.")
+                    break
+            
+        return stories_data
+        
+    except Exception as e:
+        print(f"Error scraping stories for {username}: {str(e)}")
+        return []
+    finally:
+        try:
+            # IMPORTANT: Actively try to close the story viewer
+            print("Attempting to close any open story viewers...")
+            
+            # Try multiple ways to close/exit the story viewer
+            for selector in [
+                'svg[aria-label="Close"]',               # Standard close button
+                'button[aria-label="Close"]',            # Alternative close button
+                'div[role="button"][aria-label="Close"]' # Another possible close button format
+            ]:
+                try:
+                    close_button = await page.query_selector(selector)
+                    if close_button:
+                        print(f"Found close button with selector: {selector}")
+                        await close_button.click()
+                        await page.wait_for_timeout(1000)
+                        break
+                except:
+                    continue
+                    
+            # Force navigation away from stories
+            await page.goto("https://www.instagram.com/", wait_until="domcontentloaded")
+            print("Navigated to Instagram home page to ensure clean exit")
+        except Exception as e:
+            print(f"Error during cleanup: {e}")
+        
+        # Always close the page
+        await page.close()
+        print("Page closed successfully")
 
 
 async def scrape_profiles_concurrently(context: BrowserContext, profile_links: list, post_limit: int = 10, max_tasks: int = 4):
@@ -251,13 +551,26 @@ async def main():
                     "https://www.instagram.com/rogerfederer/", # Roger Federer 
                     "https://www.instagram.com/chrishemsworth/", # Chris Hemsworth 
                     "https://www.instagram.com/shakira/", # Shakira 
-                ]
+                   ]
+
+    # Select a random profile from the list
+    random_profile = random.choice(profile_links)
+    random_username = urlparse(random_profile).path.strip('/')
+    
+    print(f"\n{'='*50}\nRANDOMLY SELECTED TARGET: {random_username}\n{'='*50}\n")
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=False)
         context = await login_to_instagram(username, password, browser)
         if context:
-            await scrape_profiles_concurrently(context, profile_links)
+            # Only scrape stories for the randomly selected profile
+            print(f"\n{'='*50}\nStarting story scraping for: {random_username}\n{'='*50}\n")
+            
+            # Scrape stories for the random target
+            await scrape_stories(context, random_username)
+            
+            print(f"\n{'='*50}\nCompleted story scraping for: {random_username}\n{'='*50}\n")
+            
             await context.close()
         await browser.close()
 
