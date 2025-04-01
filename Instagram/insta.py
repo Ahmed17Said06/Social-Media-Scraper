@@ -742,7 +742,7 @@ async def main():
     
     try:
         async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=False)
+            browser = await p.chromium.launch(headless=True)
             
             # Your existing login and scraping code...
             # Instagram credentials
