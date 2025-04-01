@@ -836,12 +836,6 @@ async def main():
         if browser:
             print("Ensuring browser is properly closed...")
             await close_browser_properly(browser)
-        # Explicitly close at the end
-        try:
-            await browser.close()
-            print("Browser closed successfully")
-        except Exception as e:
-            print(f"Error closing browser: {e}")
 
 if __name__ == "__main__":
     asyncio.run(main())
