@@ -48,35 +48,115 @@ async def download_file(url: str, filepath: str) -> bool:
         return False
 
 async def download_story_media(url: str, username: str, story_id: str) -> Optional[str]:
-    """Download story media and return the local file path"""
+    """Download story media with robust error handling"""
+    if not url:
+        print("❌ Empty URL provided")
+        return None
+    
+    # Debug output
+    print(f"📥 Downloading from URL: {url[:60]}...")
+    
+    # Create directory for downloads if it doesn't exist
+    user_media_dir = f"story_media/{username}"
+    os.makedirs(user_media_dir, exist_ok=True)
+    
+    # Handle srcset format (pick highest quality)
+    if "," in url:
+        parts = url.split(",")
+        url = parts[0].strip().split(" ")[0]
+        print(f"📥 Parsed srcset to: {url[:60]}...")
+    
+    # Handle URL encoding/escaping issues
+    if "\\u0026" in url:
+        url = url.replace("\\u0026", "&")
+        print(f"📥 Unescaped URL to: {url[:60]}...")
+    
+    # Determine file extension from URL
+    file_ext = "jpg"
+    if ".mp4" in url or "/mp4" in url:
+        file_ext = "mp4"
+    elif ".webp" in url:
+        file_ext = "webp"
+    
+    # Create filename and path
+    file_path = f"{user_media_dir}/{story_id}.{file_ext}"
+    
     try:
-        if not url or url.startswith("blob:"):
-            return None
-            
-        # Create media directory for user if it doesn't exist
-        user_media_dir = f"story_media/{username}"
-        os.makedirs(user_media_dir, exist_ok=True)
+        # Enhanced headers to mimic browser better
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+            'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+            'Referer': 'https://www.instagram.com/',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'sec-ch-ua': '"Google Chrome";v="119", "Chromium";v="119", "Not?A_Brand";v="24"',
+            'sec-ch-ua-mobile': '?0',
+            'sec-ch-ua-platform': '"macOS"',
+            'sec-fetch-dest': 'image',
+            'sec-fetch-mode': 'no-cors',
+            'sec-fetch-site': 'same-site',
+        }
         
-        # Parse URL to get file extension
-        parsed_url = urlparse(url)
-        path = parsed_url.path
-        ext = os.path.splitext(path)[1]
-        if not ext:
-            ext = ".jpg"  # Default extension
-            
-        # Create filename and path
-        filename = f"{story_id}{ext}"
-        filepath = f"{user_media_dir}/{filename}"
-        
-        # Download the file
-        success = await download_file(url, filepath)
-        if success:
-            print(f"Downloaded media to {filepath}")
-            return filepath
+        # Try multiple times with increasing timeouts
+        for attempt in range(3):
+            try:
+                timeout = aiohttp.ClientTimeout(total=30 * (attempt + 1))  # Increase timeout with each attempt
+                async with aiohttp.ClientSession(timeout=timeout) as session:
+                    async with session.get(url, headers=headers) as response:
+                        if response.status == 200:
+                            content = await response.read()
+                            if len(content) < 100:  # Very small responses are likely errors
+                                print(f"❌ Response too small ({len(content)} bytes), likely an error")
+                                continue
+                                
+                            async with aiofiles.open(file_path, 'wb') as f:
+                                await f.write(content)
+                            print(f"✅ Downloaded {len(content)} bytes to {file_path}")
+                            return file_path
+                        else:
+                            print(f"❌ Failed download attempt {attempt+1}: HTTP {response.status}")
+            except Exception as e:
+                print(f"❌ Download attempt {attempt+1} failed: {e}")
+                await asyncio.sleep(1)  # Brief pause before retry
+                
+        print(f"❌ All download attempts failed for {url[:60]}...")
         return None
+                    
     except Exception as e:
-        print(f"Error downloading story media: {e}")
+        print(f"❌ Error downloading story media: {e}")
         return None
+
+# Add this function to handle browser cleanup properly
+async def close_browser_properly(browser):
+    """Ensure browser is properly closed with all contexts"""
+    try:
+        # Get all browser contexts
+        contexts = browser.contexts
+        for context in contexts:
+            try:
+                # Close each context
+                await context.close()
+            except Exception as e:
+                print(f"Warning when closing context: {e}")
+        
+        # Finally close the browser
+        await browser.close()
+        print("Browser closed successfully")
+    except Exception as e:
+        print(f"Error during browser cleanup: {e}")
+        # Force exit as last resort
+        try:
+            import psutil
+            import os
+            current_process = psutil.Process(os.getpid())
+            children = current_process.children(recursive=True)
+            for child in children:
+                try:
+                    child.terminate()
+                except:
+                    pass
+            print("Terminated child processes")
+        except Exception as e:
+            print(f"Could not terminate processes: {e}")
 
 # ================= INSTAGRAM AUTHENTICATION =================
 STORAGE_FILE = "instagram_session.json"
@@ -154,17 +234,28 @@ async def detect_story_type(page: Page) -> str:
         video_elements = await page.query_selector_all('video, svg[aria-label="Video"], div.x78zum5 > div.x1qjc9v5')
         video_error = await page.query_selector('text="Sorry, We\'re having trouble playing this video."')
         
+        # After detecting a video:
         if video_elements or video_error:
+            # Check if this is a legitimate video story or end-of-stories video element
+            suggestion_elements = await page.query_selector_all('div.x6s0dn4.x78zum5.x1q0g3np.xm0m39n > div:has(img._aa8j)')
+            if suggestion_elements and len(suggestion_elements) > 3:
+                print("🔍 Detected suggestion grid with video elements - this is the END of stories")
+                return "end"  # New type to indicate we've reached the end
+                
             print("🎬 Detected VIDEO story")
             return "video"
         
-        # More robust image detection
-        image_elements = await page.query_selector_all([
+        # More robust image detection - FIX: Use proper Python string join
+        selectors = [
             'img.xl1xv1r', 
+            'img.xl1xv1r.x168nmei.x13lgxp2',  # Add the exact class from your example
             'img[data-visualcompletion="media-vc-image"]',
             'div.x5yr21d.x1n2onr6.xh8yej3 > img',
-            'div.x78zum5 > img'
-        ].join(', '))
+            'div.x78zum5 > img',
+            'img[alt*="Photo by"]'  # Target by alt text which includes "Photo by"
+        ]
+        selector_string = ', '.join(selectors)
+        image_elements = await page.query_selector_all(selector_string)
         
         if image_elements:
             print("🖼️ Detected IMAGE story")
@@ -182,119 +273,15 @@ async def detect_story_type(page: Page) -> str:
         print(f"Error detecting story type: {e}")
         return "unknown"
 
-# async def detect_story_type(page: Page) -> str:
-#     """Detect the type of story being viewed (image, video, or unknown)"""
-#     try:
-#         # Check for video elements
-#         video_elements = await page.query_selector_all('video, svg[aria-label="Video"], div.x78zum5 > div.x1qjc9v5')
-#         video_error = await page.query_selector('text="Sorry, We\'re having trouble playing this video."')
-        
-#         if video_elements or video_error:
-#             return "video"
-        
-#         # Check for image elements
-#         image_elements = await page.query_selector_all('div.x5yr21d.x1n2onr6.xh8yej3 > img.xl1xv1r, img[data-visualcompletion="media-vc-image"]')
-#         if image_elements:
-#             return "image"
-            
-#         # Default to unknown if unable to determine
-#         return "unknown"
-#     except Exception as e:
-#         print(f"Error detecting story type: {e}")
-#         return "unknown"
-
-# async def check_end_of_stories(page: Page) -> bool:
-#     """Check if we've reached the end of stories"""
-#     try:
-#         # Look for text indicators of end of stories
-#         end_indicators = [
-#             "You're all caught up",
-#             "No more stories",
-#             "All stories viewed"
-#         ]
-        
-#         page_text = await page.evaluate('() => document.body.innerText')
-#         for indicator in end_indicators:
-#             if indicator in page_text:
-#                 return True
-                
-#         # Check for suggestions grid (appears at end of stories)
-#         suggestions = await page.query_selector_all('[data-testid="user-card"], div.x1ja2u2z, div.x6s0dn4.x78zum5.x1q0g3np.x1a02dak')
-#         if suggestions and len(suggestions) > 3:
-#             return True
-            
-#         # Check if returned to main feed
-#         feed_indicators = await page.query_selector_all('[aria-label="Feed"]')
-#         if feed_indicators and len(feed_indicators) > 0:
-#             return True
-            
-#         return False
-#     except Exception as e:
-#         print(f"Error checking end of stories: {e}")
-#         return False
-
-
-# async def check_end_of_stories(page: Page) -> bool:
-#     """Check if we've reached the end of stories with better video story handling"""
-#     try:
-#         # IMPORTANT: First check if we're on a video story (don't mistakenly identify videos as end)
-#         video_indicators = await page.query_selector_all('video, svg[aria-label="Video"], div.x78zum5 > div.x1qjc9v5')
-#         video_error = await page.query_selector('text="Sorry, We\'re having trouble playing this video."')
-        
-#         if video_indicators or video_error:
-#             print("⚠️ Currently on a video story - this is NOT the end of stories")
-#             return False  # Don't consider a video story as the end
-            
-#         # Now check for real end indicators
-#         end_indicators = [
-#             "You're all caught up",
-#             "No more stories",
-#             "All stories viewed"
-#         ]
-        
-#         page_text = await page.evaluate('() => document.body.innerText')
-#         for indicator in end_indicators:
-#             if indicator in page_text:
-#                 print(f"✅ Found end indicator text: '{indicator}'")
-#                 return True
-                
-#         # More precise checks for end of stories UI elements
-#         suggestions = await page.query_selector_all('div[role="button"][tabindex="0"]')
-#         if suggestions and len(suggestions) > 5:
-#             print(f"✅ Found {len(suggestions)} suggestion elements - likely at end of stories")
-#             return True
-            
-#         # Additional verification for feed view
-#         feed = await page.query_selector('svg[aria-label="Feed"], div[role="main"]')
-#         if feed:
-#             # Double-check we're not in story viewer anymore
-#             story_viewer = await page.query_selector('div[role="dialog"] div.x78zum5 img')
-#             if not story_viewer:
-#                 print("✅ Detected return to main feed - stories ended")
-#                 return True
-            
-#         # If no end indicators are found, we're still in the stories
-#         return False
-        
-#     except Exception as e:
-#         print(f"❌ Error checking end of stories: {e}")
-#         return False
-
 async def check_end_of_stories(page: Page) -> bool:
     """Check if we've reached the end of stories with better detection logic"""
     try:
-        # IMPORTANT: First rule out video stories
-        video_indicators = await page.query_selector_all('video, svg[aria-label="Video"], div.x78zum5 > div.x1qjc9v5')
-        video_error = await page.query_selector('text="Sorry, We\'re having trouble playing this video."')
+        # First take a screenshot for debugging
+        debug_path = f"debug_screenshots/end_check_{int(time.time())}.png"
+        await page.screenshot(path=debug_path)
         
-        if video_indicators or video_error:
-            print("⚠️ Currently on a video story - this is NOT the end of stories")
-            return False
-            
-        # Take a debug screenshot to see what we're looking at
-        await page.screenshot(path=f"debug_screenshots/end_check_{int(time.time())}.png")
-        
-        # 1. Check for text indicators of end of stories
+        # 1. Check for specific end text indicators on the page
+        page_text = await page.evaluate('() => document.body.innerText')
         end_indicators = [
             "You're all caught up",
             "No more stories", 
@@ -302,35 +289,56 @@ async def check_end_of_stories(page: Page) -> bool:
             "See all stories"
         ]
         
-        page_text = await page.evaluate('() => document.body.innerText')
         for indicator in end_indicators:
             if indicator in page_text:
                 print(f"✅ Found end indicator text: '{indicator}'")
                 return True
-                
-        # 2. Check for profile suggestion grid (more specific selector)
-        suggestion_grid = await page.query_selector('div.x6s0dn4.x78zum5.x1q0g3np.x1a02dak > div > div.x1qjc9v5')
-        if suggestion_grid:
-            print("✅ Found suggestion grid - stories ended")
-            return True
         
-        # 3. More reliable check - look for real story content vs end screen
-        story_content = await page.query_selector('div.x6s0dn4.x78zum5.xdt5ytf.xl56j7k > img.xl1xv1r, div.x78zum5 > img[data-visualcompletion="media-vc-image"]')
-        profile_photos = await page.query_selector_all('img._aa8j')
-        
-        # FIX: JavaScript syntax -> Python syntax
-        if not story_content and len(profile_photos) > 2:
-            print("Found multiple profile photos but no story content - likely at end")
+        # 2. Check for profiles grid (displayed when stories end)
+        profile_grid = await page.query_selector('div.x6s0dn4.x78zum5.x1q0g3np.xm0m39n > div:has(img._aa8j)')
+        if profile_grid:
+            print("✅ Found profile suggestion grid - stories have ended")
             return True
             
-        # 4. Check if we left the story viewer completely
+        # 3. Check for circular UI elements that indicate profile suggestions at end
+        circles = await page.query_selector_all('div.x6s0dn4.x78zum5.xdt5ytf.x1qughib.x1rg5ohu.x1n2onr6 > div.x9f619')
+        if circles and len(circles) > 3:
+            print(f"✅ Found {len(circles)} circular profile elements - likely at end of stories")
+            return True
+            
+        # 4. Check for loop detection - if we're processing the same stories repeatedly
         current_url = page.url
-        # FIX: JavaScript syntax -> Python syntax
-        if "/stories/" not in current_url:
-            print("✅ URL changed away from stories - stories ended")
+        if "sxpk=" in current_url:
+            # There's a specific parameter in the URL when we're looping through stories again
+            print("✅ Detected URL parameter indicating story loop - reached end of stories")
             return True
+        
+        # 5. Most important: Check for cycling through same story set
+        # If we're seeing the same video story multiple times, we've reached the end
+        video_count = await page.evaluate('''
+            () => {
+                const videoElements = document.querySelectorAll('video');
+                return videoElements.length;
+            }
+        ''')
+        
+        if video_count > 0:
+            # Check time on video - if near beginning, might be looping
+            video_time = await page.evaluate('''
+                () => {
+                    const videos = document.querySelectorAll('video');
+                    if (videos.length > 0) {
+                        return videos[0].currentTime || 0;
+                    }
+                    return -1;
+                }
+            ''')
             
-        # If we're still in the story viewer and see story content, we're not at the end
+            if video_time >= 0 and video_time < 1.5:
+                print(f"✅ Detected video at start position ({video_time}s) - likely looping through stories again")
+                return True
+                
+        # If none of our checks detected the end, assume we're still in stories
         return False
         
     except Exception as e:
@@ -348,7 +356,7 @@ async def navigate_to_next_story(page: Page, story_type: str) -> Dict[str, Any]:
         await page.screenshot(path=before_path)
         
         # For videos, use multiple navigation methods
-        if story_type == "video":
+        if (story_type == "video"):
             print("🎬 SPECIALIZED VIDEO NAVIGATION")
             
             # Method 1: Try Playwright direct click with force option
@@ -356,7 +364,7 @@ async def navigate_to_next_story(page: Page, story_type: str) -> Dict[str, Any]:
             specific_classes = 'div.x1i10hfl.x972fbf.xcfux6l:has(svg[aria-label="Next"])'
             try:
                 specific_button = await page.query_selector(specific_classes)
-                if specific_button:
+                if (specific_button):
                     print("📌 Found button by specific classes - clicking...")
                     await specific_button.click(force=True)
                     await page.wait_for_timeout(2000)
@@ -436,12 +444,12 @@ async def navigate_to_next_story(page: Page, story_type: str) -> Dict[str, Any]:
         
         # Do NOT check for end of stories immediately after video navigation
         # Instead, return success and let the main loop handle detection
-        if story_type == "video":
+        if (story_type == "video"):
             return {'success': True, 'end_reached': False}
             
         # For non-video stories, check if we've reached the end
         is_end = await check_end_of_stories(page)
-        if is_end:
+        if (is_end):
             # time.sleep(10000)
             print("🏁 STOPPING FOR INSPECTION")
             print("Detected end of stories - pausing for 15 seconds to allow inspection")
@@ -542,7 +550,7 @@ async def scrape_stories(context: BrowserContext, username: str, start_from: int
             story_data['media_type'] = story_type
             
             # Handle story based on its type
-            if story_type == "video":
+            if (story_type == "video"):
                 print(f"🎬 Detected video story {story_count} - Saving screenshot")
                 
                 # Special debug screenshot showing the video state
@@ -558,12 +566,12 @@ async def scrape_stories(context: BrowserContext, username: str, start_from: int
                 stories_data.append(story_data)
                 
                 # Check if we're stuck on the same video
-                if story_id == last_video_story_id:
+                if (story_id == last_video_story_id):
                     video_story_detection_count += 1
                     print(f"⚠️ Same video detected {video_story_detection_count} times")
                     
                     # If we're truly stuck, return what we have so far
-                    if video_story_detection_count >= 3:
+                    if (video_story_detection_count >= 3):
                         print("🛑 Stuck on same video - ending gracefully")
                         return {
                             "status": "VIDEO_STORY_BLOCKER",
@@ -585,27 +593,69 @@ async def scrape_stories(context: BrowserContext, username: str, start_from: int
                 # Take another screenshot to verify movement
                 await page.screenshot(path=f"debug_screenshots/{username}_after_video_{story_count}.png")
                 
+                # Add safety check - if we've exceeded a reasonable number of stories, assume we're looping
+                if story_count >= 30:  # Instagram rarely has more than 30 stories per user
+                    print("🛑 Reached maximum reasonable story count (30) - assuming end of stories")
+                    print("This likely means we're in a loop - ending extraction")
+                    return {
+                        "status": "MAX_STORIES_REACHED",
+                        "data": stories_data,
+                        "last_processed_story": story_count,
+                        "total_stories": len(stories_data)
+                    }
+                
                 # Continue to next story without further processing this one
                 continue
 
-            elif story_type == "image":
-                # Try to extract the image URL
-                image_element = await page.query_selector('div.x5yr21d.x1n2onr6.xh8yej3 > img.xl1xv1r, img[data-visualcompletion="media-vc-image"]')
-                if image_element:
-                    media_url = await image_element.get_attribute('src')
-                    if media_url and "instagram" in media_url:
+            elif (story_type == "image"):
+                print(f"🖼️ Processing IMAGE story {story_count}")
+                
+                # Try selector from example provided in your message (most specific)
+                specific_image = await page.query_selector('img.xl1xv1r.x168nmei.x13lgxp2[alt*="Photo by"]')
+                
+                if (specific_image):
+                    print("✅ Found exact image element from your example")
+                    media_url = await specific_image.get_attribute('src')
+                    if (media_url):
+                        print(f"✅ Got image URL: {media_url[:60]}...")
                         story_data['media_url'] = media_url
                         
                         # Download image
-                        if not media_url.startswith('blob:'):
+                        media_file_path = await download_story_media(media_url, username, story_id)
+                        if (media_file_path):
+                            story_data['media_file_path'] = media_file_path
+                            print(f"✅ Downloaded media to {media_file_path}")
+                
+                # If that fails, try any images with "Photo by" in alt text
+                if (not story_data.get('media_url')):
+                    print("⚠️ Trying images with 'Photo by' in alt text...")
+                    photo_images = await page.query_selector_all('img[alt*="Photo by"]')
+                    
+                    for img in photo_images:
+                        media_url = await img.get_attribute('src')
+                        if (media_url and ('instagram' in media_url or 'fbcdn' in media_url)):
+                            print(f"✅ Found image with 'Photo by' alt text: {media_url[:60]}...")
+                            story_data['media_url'] = media_url
+                            
+                            # Download image
                             media_file_path = await download_story_media(media_url, username, story_id)
-                            if media_file_path:
+                            if (media_file_path):
                                 story_data['media_file_path'] = media_file_path
+                                print(f"✅ Downloaded media to {media_file_path}")
+                            break
+                
+                # If all else fails, try screenshot-based approach
+                if (not story_data.get('media_url')):
+                    print("⚠️ Using screenshot as fallback...")
+                    screenshot_path = f"story_media/{username}/{story_id}_screenshot.png"
+                    await page.screenshot(path=screenshot_path)
+                    story_data['media_file_path'] = screenshot_path
+                    story_data['media_from_screenshot'] = True
+                    print(f"✅ Saved screenshot to {screenshot_path}")
                 
                 # Save to MongoDB and add to results
                 collection.update_one({'story_id': story_id}, {'$set': story_data}, upsert=True)
                 stories_data.append(story_data)
-                
             else:
                 # Unknown type, just save screenshot and move on
                 story_data['media_type'] = 'unknown'
@@ -616,16 +666,16 @@ async def scrape_stories(context: BrowserContext, username: str, start_from: int
             navigation_result = await navigate_to_next_story(page, story_type)
             
             # Handle navigation result
-            if navigation_result.get('end_reached', False):
+            if (navigation_result.get('end_reached', False)):
                 print("🏁 End of stories reached - ending extraction")
                 break
                 
             # Track navigation failures
-            if not navigation_result.get('success', False):
+            if (not navigation_result.get('success', False)):
                 consecutive_navigation_failures += 1
                 print(f"⚠️ Navigation failure {consecutive_navigation_failures}/3")
                 
-                if consecutive_navigation_failures >= 3:
+                if (consecutive_navigation_failures >= 3):
                     print("Too many navigation failures, ending extraction")
                     break
             else:
@@ -663,121 +713,135 @@ async def scrape_stories(context: BrowserContext, username: str, start_from: int
                     if close_button:
                         print(f"Found close button with selector: {selector}")
                         await close_button.click()
-                        await page.wait_for_timeout(1000)
+                        await page.wait_for_timeout(2000)
                         break
-                except:
-                    continue
+                except Exception as close_error:
+                    print(f"Error with close button {selector}: {close_error}")
             
-            # Navigate away
-            await page.goto("https://www.instagram.com/", wait_until="domcontentloaded")
-            print("Navigated to Instagram home page to ensure clean exit")
+            # Navigate to main page to ensure we're out of stories mode
+            try:
+                await page.goto("https://www.instagram.com/", timeout=10000)
+                print("Navigated to Instagram home page to ensure clean exit")
+            except Exception as nav_error:
+                print(f"Error during cleanup navigation: {nav_error}")
+            
+            # Close the page properly
+            try:
+                await page.close()
+                print("Page closed successfully")
+            except Exception as page_error:
+                print(f"Error closing page: {page_error}")
+        
         except Exception as e:
             print(f"Error during cleanup: {e}")
-        
-        await page.close()
-        print("Page closed successfully")
 
 # ================= MAIN EXECUTION =================
 async def main():
-    """Main execution function"""
-    # Instagram credentials
-    username = "insta.25.scra"
-    password = "hello@WORLD@2025"
+    # Your existing code...
+    browser = None
     
-    # Target usernames to scrape - replace with your targets
-    target_usernames = [
-        "arianagrande",
-        "kimkardashian",
-        "cristiano",
-        "kyliejenner",
-        "selenagomez",
-        "therock"
-    ]
-    
-    # Initialize the browser
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(
-            headless=False,
-            args=[
-                '--autoplay-policy=no-user-gesture-required',
-                '--disable-web-security',
-                '--use-fake-ui-for-media-stream',
-                '--disable-features=PreloadMediaEngagementData,AutoplayIgnoreWebAudio',
-                '--disable-blink-features=AutomationControlled'
-            ]
-        )
-        
-        # Login to Instagram
-        logged_in_context = await login_to_instagram(username, password, browser)
-        
-        # Randomly select a target username
-        random.shuffle(target_usernames)
-        random_username = target_usernames[0]
-        random_username = "arianagrande"
-        
-        # Scraping with retry mechanism
-        max_retry_attempts = 3
-        retry_count = 0
-        last_story_num = 0
-        all_stories_data = []
-        
-        print(f"\n{'='*50}\nStarting story scraping for: {random_username}\n{'='*50}\n")
-        
-        while retry_count < max_retry_attempts:
-            try:
-                # Start from the story after the last one we processed
-                start_from = last_story_num + 1
-                
-                # Call scrape_stories with the logged in context
-                result = await scrape_stories(logged_in_context, random_username, start_from=start_from)
-                
-                # Check the status code from the result
-                status = result.get("status", "UNKNOWN")
-                stories = result.get("data", [])
-                
-                # Add any new stories to our collection
-                all_stories_data.extend(stories)
-                
-                # Update our last processed story
-                if "last_processed_story" in result:
-                    last_story_num = result["last_processed_story"]
-                
-                if status == "SUCCESS":
-                    print(f"Successfully completed story scraping with {len(stories)} stories")
-                    break  # Exit retry loop on success
-                    
-                elif status == "VIDEO_STORY_BLOCKER":
-                    print(f"Encountered problematic video story at position {last_story_num}")
-                    print(f"Collected {len(stories)} stories before getting blocked")
-                    
-                    # Increment retry counter only for video story blockers
-                    retry_count += 1
-                    
-                    # If we have a lot of stories already, consider it good enough
-                    if len(all_stories_data) >= 5:
-                        print("Already collected a reasonable number of stories, ending gracefully")
-                        break
-                    
-                    print(f"Will retry from story #{start_from + 1}")
-                    
-                elif status == "NO_STORIES":
-                    print("Target has no active stories")
-                    break  # No need to retry
-                    
-                else:  # Any other status like ERROR or UNKNOWN
-                    print(f"Received status: {status}, not retrying")
-                    if stories:
-                        print(f"Still collected {len(stories)} stories")
-                    break  # Don't retry for general errors
+    try:
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=False)
             
-            except Exception as e:
-                print(f"Unexpected error during story scraping: {e}")
-                break  # Don't retry for unexpected errors
-        
-        print(f"\n{'='*50}\nCompleted story scraping for: {random_username} with {len(all_stories_data)} total stories\n{'='*50}\n")
-        
-        # Close the browser
-        await browser.close()
+            # Your existing login and scraping code...
+            # Instagram credentials
+            username = "insta.25.scra"
+            password = "hello@WORLD@2025"
+            
+            # Target usernames to scrape - replace with your targets
+            target_usernames = [
+                "arianagrande",
+                "kimkardashian",
+                "cristiano",
+                "kyliejenner",
+                "selenagomez",
+                "therock"
+            ]
+            
+            # Login to Instagram
+            logged_in_context = await login_to_instagram(username, password, browser)
+            
+            # Randomly select a target username
+            random.shuffle(target_usernames)
+            random_username = target_usernames[0]
+            random_username = "arianagrande"
+            
+            # Scraping with retry mechanism
+            max_retry_attempts = 3
+            retry_count = 0
+            last_story_num = 0
+            all_stories_data = []
+            
+            print(f"\n{'='*50}\nStarting story scraping for: {random_username}\n{'='*50}\n")
+            
+            while retry_count < max_retry_attempts:
+                try:
+                    # Start from the story after the last one we processed
+                    start_from = last_story_num + 1
+                    
+                    # Call scrape_stories with the logged in context
+                    result = await scrape_stories(logged_in_context, random_username, start_from=start_from)
+                    
+                    # Check the status code from the result
+                    status = result.get("status", "UNKNOWN")
+                    stories = result.get("data", [])
+                    
+                    # Add any new stories to our collection
+                    all_stories_data.extend(stories)
+                    
+                    # Update our last processed story
+                    if ("last_processed_story" in result):
+                        last_story_num = result["last_processed_story"]
+                    
+                    if (status == "SUCCESS"):
+                        print(f"Successfully completed story scraping with {len(stories)} stories")
+                        break  # Exit retry loop on success
+                        
+                    elif (status == "VIDEO_STORY_BLOCKER"):
+                        print(f"Encountered problematic video story at position {last_story_num}")
+                        print(f"Collected {len(stories)} stories before getting blocked")
+                        
+                        # Increment retry counter only for video story blockers
+                        retry_count += 1
+                        
+                        # If we have a lot of stories already, consider it good enough
+                        if (len(all_stories_data) >= 5):
+                            print("Already collected a reasonable number of stories, ending gracefully")
+                            break
+                        
+                        print(f"Will retry from story #{start_from + 1}")
+                        
+                    elif (status == "NO_STORIES"):
+                        print("Target has no active stories")
+                        break  # No need to retry
+                        
+                    else:  # Any other status like ERROR or UNKNOWN
+                        print(f"Received status: {status}, not retrying")
+                        if (stories):
+                            print(f"Still collected {len(stories)} stories")
+                        break  # Don't retry for general errors
+                
+                except Exception as e:
+                    print(f"Unexpected error during story scraping: {e}")
+                    break  # Don't retry for unexpected errors
+            
+            print(f"\n{'='*50}\nCompleted story scraping for: {random_username} with {len(all_stories_data)} total stories\n{'='*50}\n")
+    
+    except Exception as e:
+        print(f"Error in main execution: {e}")
+    
+    finally:
+        # Always ensure browser is closed, even if errors occurred
+        if browser:
+            print("Ensuring browser is properly closed...")
+            await close_browser_properly(browser)
+        # Explicitly close at the end
+        try:
+            await browser.close()
+            print("Browser closed successfully")
+        except Exception as e:
+            print(f"Error closing browser: {e}")
 
 if __name__ == "__main__":
     asyncio.run(main())
